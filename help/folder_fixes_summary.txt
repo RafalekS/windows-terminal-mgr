@@ -1,0 +1,45 @@
+FOLDERS TAB FIXES - IMPLEMENTATION PLAN
+
+HIGH PRIORITY FIXES:
+
+1. ADD FOLDER - Make it immediate and intuitive
+   - Show input dialog to enter folder name
+   - Create folder with that name
+   - Select it in the tree automatically
+   - User can then add profiles to it
+
+2. UPDATE ITEM - Make it work and be obvious
+   - Already works, but needs better UX
+   - Consider auto-update on text change OR
+   - Make button more prominent with tooltip
+
+3. ADD PROFILE - Fix the workflow
+   - Should show dialog to select profile from ALL profiles
+   - Add to current folder if folder selected
+   - Add to root if nothing selected
+   - Don't require profile dropdown to be enabled
+
+4. PROFILE DROPDOWN - Remove confusion
+   - This dropdown is only for CHANGING which profile an entry points to
+   - Most users won't need this
+   - Redesign UI to make this clearer
+
+5. DISPLAY ALL PROFILES
+   - Expand remainingProfiles to show actual profiles
+   - Show profiles NOT in newTabMenu at all
+   - Make it visual which profiles are assigned where
+
+6. MOVE UP/DOWN - Fix for profiles in folders
+   - Currently only works on top-level items
+   - Need to get parent and reorder within parent's entries
+
+KEY USER CONFUSION:
+- Users think "Profile dropdown" is for selecting which profile to ADD
+- Actually it's for CHANGING which profile an existing entry points to
+- Need to separate "Add Profile" (select from list) from "Change Profile" (change existing entry)
+
+BETTER WORKFLOW:
+1. Add Folder: Dialog → Enter name → Created and selected
+2. Add Profile: Dialog → Pick from ALL profiles → Added to current location
+3. Update Item: Either auto-update OR obvious button
+4. Move/Reorder: Drag-drop OR Move Up/Down works everywhere

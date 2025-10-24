@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__MicrosoftDocs__microsoft_docs_search",
+      "Bash(python:*)",
+      "Bash(git init:*)",
+      "Bash(git config:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
