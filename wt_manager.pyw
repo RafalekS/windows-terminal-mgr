@@ -23,6 +23,9 @@ def debug_print(*args_print, **kwargs):
     if DEBUG:
         print(*args_print, **kwargs)
 
+# Store the script directory before changing to settings directory
+SCRIPT_DIR = Path(__file__).parent.absolute()
+
 # Place in the "settings.json" directory
 homePath = os.getenv("HOMEPATH")
 
@@ -324,6 +327,16 @@ class Ui_MainWindow(object):
         self.tabTitleEdit = QtWidgets.QLineEdit()
         scroll_layout.addRow("Tab Title:", self.tabTitleEdit)
 
+        # Tab Color field with color picker button
+        tab_color_layout = QtWidgets.QHBoxLayout()
+        self.tabColorEdit = QtWidgets.QLineEdit()
+        self.tabColorEdit.setPlaceholderText("#RRGGBB or #RGB")
+        self.tabColorPickButton = QtWidgets.QPushButton("Pick Color...")
+        self.tabColorPickButton.setMaximumWidth(120)
+        tab_color_layout.addWidget(self.tabColorEdit)
+        tab_color_layout.addWidget(self.tabColorPickButton)
+        scroll_layout.addRow("Tab Color:", tab_color_layout)
+
         # Icon field with browse button
         icon_layout = QtWidgets.QHBoxLayout()
         self.iconEdit = QtWidgets.QLineEdit()
@@ -370,6 +383,8 @@ class Ui_MainWindow(object):
         self.commandLineEdit.textChanged.connect(self.changeCommandLine)
         self.startingDirectoryEdit.textChanged.connect(self.changeStartingDirectory)
         self.tabTitleEdit.textChanged.connect(self.changeTabTitle)
+        self.tabColorEdit.textChanged.connect(self.changeTabColor)
+        self.tabColorPickButton.clicked.connect(self.pickTabColor)
         self.iconEdit.textChanged.connect(self.changeIcon)
         self.iconBrowseButton.clicked.connect(self.browseIcon)
         self.paddingEdit.textChanged.connect(self.changePadding)
@@ -981,6 +996,22 @@ Tips:
                 del data_schemes['profiles']['list'][currentProfileIndex]['tabTitle']
             self.setUnsavedChanges()
 
+    def changeTabColor(self, text):
+        if not self.ui_initialized:
+            return
+        currentProfileIndex = self.getCurrentIndex()
+        if currentProfileIndex >= 0:
+            if text:
+                data_schemes['profiles']['list'][currentProfileIndex]['tabColor'] = text
+            elif 'tabColor' in data_schemes['profiles']['list'][currentProfileIndex]:
+                del data_schemes['profiles']['list'][currentProfileIndex]['tabColor']
+            self.setUnsavedChanges()
+
+    def pickTabColor(self):
+        col = QtWidgets.QColorDialog.getColor()
+        if col.isValid():
+            self.tabColorEdit.setText(col.name())
+
     def changeIcon(self, text):
         if not self.ui_initialized:
             return
@@ -1086,6 +1117,9 @@ Tips:
 
         # Update tab title
         self.tabTitleEdit.setText(profile.get('tabTitle', ''))
+
+        # Update tab color
+        self.tabColorEdit.setText(profile.get('tabColor', ''))
 
         # Update icon
         self.iconEdit.setText(profile.get('icon', ''))
@@ -2880,10 +2914,12 @@ if __name__ == "__main__":
     MainWindow = QtWidgets.QMainWindow()
     app.setStyle('Fusion')
 
-    # Try to load the icon
-    icon_path = 'wt3.ico'
-    if os.path.exists(icon_path):
-        icon = QtGui.QIcon(icon_path)
+    # Try to load the icon using absolute path from script directory
+    icon_path = SCRIPT_DIR / 'WT_config.ico'
+    if not icon_path.exists():
+        icon_path = SCRIPT_DIR / 'wt3.ico'  # Fallback to old icon
+    if icon_path.exists():
+        icon = QtGui.QIcon(str(icon_path))
         app.setWindowIcon(icon)
         MainWindow.setWindowIcon(icon)
 
