@@ -105,20 +105,42 @@ Backups are stored in the Windows Terminal settings directory:
 %LOCALAPPDATA%\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\
 ```
 
-## Tab Color Feature
+## Key Workflows
 
-The tab color feature helps you visually distinguish different profile tabs in Windows Terminal.
+### Building Windows Terminal Commands
 
-**To set a tab color:**
-1. Go to **Profiles** tab
-2. Select a profile from the list
-3. Scroll to **Tab Color** field
-4. Either:
-   - Type a color manually: `#FF5733`, `#F73`, `rgb(255,87,51)`
-   - Click **Pick Color...** to use the visual color picker
-5. Click **Save**
+The Command Builder lets you create complex `wt.exe` commands visually:
 
-![Tab Color Example](https://via.placeholder.com/600x100/FF5733/FFFFFF?text=Orange+Tab)
+1. Go to **WT Command Builder** tab
+2. Set global options (maximized, focus, window mode)
+3. Click **Add New Tab** or **Add Split Pane** buttons
+4. Configure each step:
+   - Select profile, color scheme, title
+   - Set starting directory and tab color
+   - Choose split orientation (horizontal/vertical) and size
+5. Click **Copy** to copy the generated command
+6. Paste into Run dialog, batch file, or shortcut
+
+**Example output:**
+```
+wt --maximized new-tab -p "PowerShell" --colorScheme "One Half Dark" ; split-pane -H --size 0.3 wsl.exe
+```
+
+You can also **Parse** existing commands by pasting them into the preview box.
+
+### Managing Folder Structure
+
+Organize your profiles into folders for the new tab dropdown menu:
+
+1. Go to **Folders & New Tab Menu** tab
+2. Click **Add Folder** and enter a name
+3. Select the folder, then click **Add Profile** to add profiles to it
+4. Use **Move Up/Down** to reorder items
+5. Add **Separators** between groups
+6. Set folder icons and display options (allowEmpty, inline)
+7. Click **Save** to apply changes
+
+The tree structure directly controls what you see in Windows Terminal's new tab dropdown.
 
 ## File Structure
 
