@@ -2450,28 +2450,30 @@ Tips:
             item.setData(0, QtCore.Qt.ItemDataRole.UserRole, entry)
 
         elif entry_type == 'remainingProfiles':
-            # Expand remainingProfiles to show actual profiles
-            item = QtWidgets.QTreeWidgetItem(parent, ["Remaining Profiles", "📋 Auto-Generated"])
-            item.setData(0, QtCore.Qt.ItemDataRole.UserRole, entry)
-            item.setForeground(0, QtGui.QBrush(QtGui.QColor("#888888")))  # Gray text
-
-            # Find which profiles are already in the menu
+            # Expand remainingProfiles to show actual unassigned profiles
             assigned_guids = self.getAssignedProfileGuids()
+            unassigned = [p for p in data_schemes.get('profiles', {}).get('list', [])
+                          if p.get('guid') and p.get('guid') not in assigned_guids]
+            count = len(unassigned)
 
-            # Add all unassigned profiles as children
-            for profile in data_schemes.get('profiles', {}).get('list', []):
+            item = QtWidgets.QTreeWidgetItem(parent,
+                [f"Remaining Profiles ({count} auto-listed)", "📋 Auto"])
+            item.setData(0, QtCore.Qt.ItemDataRole.UserRole, entry)
+            item.setForeground(0, QtGui.QBrush(QtGui.QColor("#a6adc8")))
+            item.setToolTip(0, "Profiles not explicitly in the menu. WT shows these automatically.")
+
+            for profile in unassigned:
                 guid = profile.get('guid')
                 name = profile.get('name', 'Unknown')
-                if guid and guid not in assigned_guids:
-                    # Create a virtual profile entry
-                    virtual_entry = {
-                        'type': 'profile',
-                        'profile': guid,
-                        'icon': None
-                    }
-                    child_item = QtWidgets.QTreeWidgetItem(item, [name, "👤 Unassigned"])
-                    child_item.setData(0, QtCore.Qt.ItemDataRole.UserRole, virtual_entry)
-                    child_item.setForeground(0, QtGui.QBrush(QtGui.QColor("#0066CC")))  # Blue text
+                child_item = QtWidgets.QTreeWidgetItem(item, [f"  {name}", "👤 Auto"])
+                # Store a marker so we know this is a virtual/auto entry
+                child_item.setData(0, QtCore.Qt.ItemDataRole.UserRole,
+                    {'type': '_virtual_remaining', 'profile': guid})
+                child_item.setForeground(0, QtGui.QBrush(QtGui.QColor("#89b4fa")))
+                child_item.setToolTip(0, f"GUID: {guid}\nRight-click or use 'Move Profile' to assign explicitly")
+
+            # Auto-expand to show what's inside
+            item.setExpanded(True)
 
         else:
             # Handle other types (matchProfiles, etc.)
@@ -2642,6 +2644,14 @@ Tips:
 
         elif entry_type == 'separator':
             self.itemTypeLabel.setText("➖ Separator")
+
+        elif entry_type == 'remainingProfiles':
+            self.itemTypeLabel.setText("📋 Remaining Profiles (auto-generated)")
+
+        elif entry_type == '_virtual_remaining':
+            profile_guid = entry.get('profile', '')
+            profile_name = self.getProfileNameByGuid(profile_guid)
+            self.itemTypeLabel.setText(f"👤 {profile_name} (auto-listed, not explicitly in menu)")
 
     def browseFolderIcon(self):
         """Browse for folder icon"""
