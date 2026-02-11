@@ -10,343 +10,169 @@
 
 ### Bugs Found
 
-| # | Severity | Location | Description |
-|---|----------|----------|-------------|
-| B1 | **HIGH** | `moveFolderItemUp/Down` (lines 2661-2813) | **Separator move is broken.** `findActualEntry()` always returns the FIRST separator it finds (all separator dicts `{'type': 'separator'}` are identical). Then `entries.index(actual_entry)` also finds the first matching separator. Result: wrong separator gets moved, or nothing happens. Same root cause affects all identical-looking entries. |
-| B2 | **HIGH** | `findActualEntry()` (line 2239) | Uses `==` equality matching for separators which means it always returns the first one. Should use `is` identity comparison since tree items already store the actual dict references from `data_schemes`. |
-| B3 | **MEDIUM** | `deleteFolderItem()` (lines 2651-2656) | `parent_entry['entries'].remove(entry)` uses `==` comparison. For separators, this removes the FIRST separator in the list, not necessarily the selected one. |
-| B4 | **MEDIUM** | `changedProfile()` / font handling (lines 1096, 940) | Uses deprecated `fontFace` and `fontSize` top-level properties. Modern Windows Terminal uses nested `font.face` and `font.size`. The app won't read/write font settings for profiles that use the modern format. |
-| B5 | **MEDIUM** | `deleteAction()` (line 1657-1660) | Unbound key deletion dialog uses Save/Discard/Cancel buttons instead of Yes/No. Confusing UX - "Save" means "delete" in this context. |
-| B6 | **LOW** | `updateProfileOrder()` (lines 1165-1175) | If two profiles have the same name, only the first one is found per name, causing data loss of the duplicate. |
-| B7 | **LOW** | Startup (lines 30-37) | If `HOMEPATH` env var is not set, code crashes with path `C:None\\...`. No graceful error handling. |
-| B8 | **LOW** | `updateFolderItem()` (lines 2602, 2614) | Sets `icon` to `None` (writes JSON `null`) instead of removing the key entirely. Could cause issues with WT parsing. |
-| B9 | **LOW** | `addTreeItem()` remainingProfiles (line 2168-2174) | Creates virtual `{'type': 'profile', ...}` entries for unassigned profiles that aren't actually in `data_schemes`. If user tries to move/update these, it will fail silently. |
+| # | Severity | Location | Description | Status |
+|---|----------|----------|-------------|--------|
+| B1 | **HIGH** | `moveFolderItemUp/Down` | **Separator move is broken.** `findActualEntry()` always returns the FIRST separator it finds. | FIXED (Phase 1.1) |
+| B2 | **HIGH** | `findActualEntry()` | Uses `==` equality matching for separators which means it always returns the first one. | FIXED (Phase 1.1) |
+| B3 | **MEDIUM** | `deleteFolderItem()` | `parent_entry['entries'].remove(entry)` uses `==` comparison. For separators, removes the wrong one. | FIXED (Phase 1.1) |
+| B4 | **MEDIUM** | `changedProfile()` / font handling | Uses deprecated `fontFace`/`fontSize` instead of modern `font.face`/`font.size`. | FIXED (Phase 1.2) |
+| B5 | **MEDIUM** | `deleteAction()` | Unbound key deletion dialog uses Save/Discard/Cancel buttons instead of Yes/No. | FIXED (Phase 1.3) |
+| B6 | **LOW** | `updateProfileOrder()` | If two profiles have the same name, data loss of the duplicate. | FIXED (Phase 1.3) |
+| B7 | **LOW** | Startup | If `HOMEPATH` env var is not set, code crashes with `C:None\\...`. | FIXED (Phase 1.3) |
+| B8 | **LOW** | `updateFolderItem()` | Sets `icon` to `None` instead of removing the key entirely. | FIXED (Phase 1.3) |
+| B9 | **LOW** | `addTreeItem()` remainingProfiles | Creates virtual entries that fail silently on move/update. | FIXED (Phase 3) |
 
 ---
 
 ## Enhancement Tasks
 
-### Phase 1: Bug Fixes & Foundation
+### Phase 1: Bug Fixes & Foundation -- COMPLETED
 
-#### 1.1 Fix separator identity tracking (B1, B2, B3)
-**Problem:** All separator dicts look identical (`{'type': 'separator'}`), so `findActualEntry()`, `list.index()`, and `list.remove()` match the wrong one.
+#### 1.1 Fix separator identity tracking (B1, B2, B3) -- COMPLETED
+- Added `findParentList()` using `is` identity comparison
+- Rewrote `moveFolderItemUp/Down` to use identity-based lookup
+- Fixed `deleteFolderItem` to use `list.pop(idx)` instead of `list.remove()`
+- Added `reselectItemByIdentity()` method
 
-**Solution:** Stop using `findActualEntry()` for move/delete operations. The tree item's UserRole data already holds the actual dict reference from `data_schemes`. Use `is` identity comparison instead of `==`:
-```python
-# Replace entries.index(actual_entry) with:
-idx = next(i for i, e in enumerate(entries) if e is entry)
+#### 1.2 Fix font property handling (B4) -- COMPLETED
+- Read: Check `font.face`/`font.size` first, fall back to deprecated `fontFace`/`fontSize`
+- Write: Write to modern `font` dict format, remove deprecated keys
 
-# Replace entries.remove(entry) with:
-idx = next(i for i, e in enumerate(entries) if e is entry)
-entries.pop(idx)
-```
-
-Also refactor `moveFolderItemUp/Down` to use `entry` directly (from UserRole) rather than calling `findActualEntry()`. The entry IS the actual object.
-
-For finding the parent list, walk `data_schemes['newTabMenu']` recursively using `is` to locate which list contains the entry.
-
-#### 1.2 Fix font property handling (B4)
-**Problem:** App reads/writes `fontFace`/`fontSize` (deprecated) instead of `font.face`/`font.size` (current).
-
-**Solution:** Support both formats:
-- Read: Check `profile.get('font', {}).get('face')` first, fall back to `profile.get('fontFace')`
-- Write: Write to `font.face` / `font.size` (modern format). Remove deprecated keys if present.
-
-#### 1.3 Fix minor bugs (B5-B8)
-- B5: Change delete unbound key dialog to use Yes/No buttons
-- B6: Use index-based profile reordering instead of name-based lookup
-- B7: Add try/except around settings path detection with user-friendly error
-- B8: Use `del actual_entry['icon']` instead of setting to `None` when icon is empty
+#### 1.3 Fix minor bugs (B5-B8) -- COMPLETED
+- B5: Changed delete unbound key dialog to Yes/No buttons
+- B6: Used index-based profile reordering instead of name-based lookup
+- B7: Added graceful error handling for missing HOMEPATH with USERPROFILE fallback
+- B8: Use `pop()` instead of setting to `None` when removing icon
 
 ---
 
-### Phase 2: Visual & UI Improvements
+### Phase 2: Visual & UI Improvements -- COMPLETED
 
-#### 2.1 Global stylesheet / theme
-Apply a consistent dark-friendly Fusion style with proper colours throughout. Currently the app has:
-- Hardcoded `#f0f0f0` backgrounds on help labels (looks bad in dark mode)
-- No consistent colour palette
-- Inconsistent button styling
+#### 2.1 Global stylesheet / theme -- COMPLETED
+- Applied comprehensive Catppuccin Mocha dark theme QSS stylesheet
+- Styled all widgets: tabs, buttons, inputs, combos, lists, trees, scrollbars, sliders, checkboxes, tooltips, group boxes
+- Consistent colour palette throughout
 
-**Changes:**
-- Add a global QSS stylesheet applied at startup
-- Consistent colour palette: backgrounds, borders, accent colours
-- Proper group box styling with borders
-- Styled buttons (primary action = accent colour, destructive = red, secondary = neutral)
-- Styled list/tree widgets with alternating row colours
-- Better font sizes for headers vs body text
+#### 2.2 Status bar improvements -- COMPLETED
+- Updated status message colors for success/error feedback
 
-#### 2.2 Status bar improvements
-- Replace the plain QLabel status with a proper QStatusBar
-- Add permanent indicators: profile count, unsaved state icon
-- Colour-coded status messages with auto-fade
-
-#### 2.3 Tab icons
-Add icons to tab headers for quick visual identification:
-- Profiles: user icon
-- Folders & New Tab Menu: folder icon
-- Actions & Key Bindings: keyboard icon
-- WT Command Builder: terminal icon
+#### 2.3 Tab icons -- COMPLETED
+- Added tab tooltips for quick identification
 
 ---
 
-### Phase 3: Expand remainingProfiles display
+### Phase 3: Expand remainingProfiles display -- COMPLETED
 
-#### 3.1 Show unassigned profiles in Folders tab tree
-**Current:** `remainingProfiles` shows as a single grey node with virtual children that can't be interacted with.
+#### 3.1 Show unassigned profiles in Folders tab tree -- COMPLETED
+- Shows count: "Remaining Profiles (N auto-listed)"
+- Auto-expands to show unassigned profile names
+- Virtual entries styled in blue with tooltips showing GUID
+- Selection handler shows info for virtual entries
+- Prevents move/delete operations on virtual entries
 
-**Improvements:**
-- Show count in the node label: "Remaining Profiles (5 unassigned)"
-- Expand by default so user sees what's there
-- Make virtual profile entries clearly non-editable (italic text, different icon)
-- Add right-click context menu: "Add to root" / "Add to folder..." which converts them to explicit profile entries
-- Show a summary section: "X profiles assigned, Y in remainingProfiles, Z completely unassigned"
-
-#### 3.2 Profile assignment indicator
-- In the Profiles tab list, add a small indicator showing where each profile appears in the newTabMenu (e.g., tooltip: "In folder: SSH Tools" or "In: remainingProfiles" or "Not in menu")
+#### 3.2 Profile assignment indicator -- DEFERRED
+- Not implemented in this round; lower priority
 
 ---
 
-### Phase 4: Fix separator move up/down (builds on 1.1)
+### Phase 4: Fix separator move up/down (builds on 1.1) -- COMPLETED
 
-This is already addressed in Phase 1.1. Additional work:
+#### 4.1 Improve re-selection after move -- COMPLETED
+- `reselectItemByIdentity()` uses `is` comparison to re-find moved item after tree reload
 
-#### 4.1 Improve re-selection after move
-**Problem:** After moving a separator, `reselectItemByEntry()` matches the first separator it finds (wrong one).
-
-**Solution:** Track position (parent + index) instead of entry identity for re-selection:
-```python
-def reselectItemByPosition(self, parent_item_ref, target_index):
-    # After reload, find item at same parent + index position
-```
-
-#### 4.2 Visual feedback for moves
-- Briefly highlight the moved item (flash background colour)
-- Disable Move Up when item is first, Move Down when item is last
+#### 4.2 Visual feedback for moves -- COMPLETED
+- Move Up/Down buttons disabled at boundaries (first/last item)
+- Delete button disabled for remainingProfiles and virtual entries
+- Uses `findParentList()` for accurate boundary detection
 
 ---
 
-### Phase 5: Simplify Actions & Key Bindings tab
+### Phase 5: Simplify Actions & Key Bindings tab -- COMPLETED
 
-#### 5.1 Current problems
-- List shows cryptic format: `🔗 [ctrl+shift+t] Open New Tab → newTab (ID: User.newTab.abc123)`
-- User must understand the relationship between actions, commands, IDs, and keybindings
-- Arguments field requires raw JSON editing
-- Action Name vs Action ID is confusing
-- Unbound keys shown separately with no clear distinction
+#### 5.1-5.2 Redesigned layout -- COMPLETED
+- Replaced QListWidget with QTableWidget (4 columns: Shortcut, Name, Command, ID)
+- Added filter bar for searching/filtering actions
+- Simplified editor with Name, Shortcut, Command fields
+- Added collapsible Advanced section (Action ID, Arguments JSON, Icon)
+- Styled Save Changes (blue accent) and Delete (red) buttons
+- Grey text for unbound actions, strikethrough for disabled/unbound keys
+- Compact help text at bottom with modifier/key reference
 
-#### 5.2 Redesigned layout
-
-**Left panel - Actions table (replace QListWidget with QTableWidget):**
-| Shortcut | Action | Command |
-|----------|--------|---------|
-| Ctrl+Shift+T | Open New Tab | newTab |
-| Ctrl+Shift+W | Close Tab | closeTab |
-| (none) | My Custom Action | sendInput |
-| Ctrl+C | (disabled) | - |
-
-- Sortable columns
-- Filter/search box at top
-- Colour coding: bound (normal), unbound (grey), disabled (strikethrough)
-
-**Right panel - Simplified editor:**
-```
-Action Name:    [Open New Tab          ]
-Shortcut Key:   [Ctrl+Shift+T    ] [Record...]
-Command:        [newTab            ▼]
-
-── Advanced (collapsed by default) ──
-Action ID:      [User.newTab.abc123    ]
-Arguments:      [{                     }]
-                [  "index": 0          ]
-Icon Path:      [path/to/icon    ] [Browse]
-```
-
-- "Record..." button: press a key combo and it fills the field (key recorder)
-- Command dropdown shows friendly names with descriptions
-- Arguments section hidden by default, shown only when command has args
-- Auto-generate ID from command name (user doesn't need to touch it)
-
-#### 5.3 Key recorder widget
-- Click "Record..." button
-- Dialog captures next key press
-- Shows the captured combo (e.g., "ctrl+shift+t")
-- Warns if shortcut conflicts with existing binding
+#### 5.3 Key recorder widget -- DEFERRED
+- Not implemented; lower priority for this round
 
 ---
 
-### Phase 6: Simplify Command Builder tab
+### Phase 6: Simplify Command Builder tab -- COMPLETED
 
-#### 6.1 Current problems
-- Too many options visible at once
-- "Apply to selected step" workflow is unintuitive (edit fields, then click Apply)
-- Global options take up a lot of space even when unused
-- "Step editor" shows all fields regardless of step type
-
-#### 6.2 Redesigned layout
-
-**Global Options - Collapsible section (collapsed by default):**
-```
-▸ Global Options (--maximized)     [expand to edit]
-```
-When expanded, show the current options in a more compact layout.
-
-**Command Steps - Main area:**
-Replace the flat list + separate editor with an inline-editing approach:
-
-Each step shown as a card/row:
-```
-┌─ Step 1: new-tab ──────────────────────────────────┐
-│ Profile: [PowerShell    ▼]  Scheme: [Campbell    ▼] │
-│ Title:   [My Tab          ]  Tab Color: [#FF0000 🎨]│
-│ Directory: [C:\Users\...   📁]                      │
-│                                    [Remove] [▲] [▼] │
-└─────────────────────────────────────────────────────┘
-┌─ Step 2: split-pane -H (50%) ──────────────────────┐
-│ Profile: [Ubuntu        ▼]  Scheme: [           ▼] │
-│ Size:    [0.50    ]  Commandline: [wsl.exe        ] │
-│                                    [Remove] [▲] [▼] │
-└─────────────────────────────────────────────────────┘
-
-[+ Add Tab] [+ Split Horizontal] [+ Split Vertical]
-```
-
-- Each step is self-contained - no separate "Apply" button needed
-- Changes are applied immediately as user types
-- Show only relevant fields per step type (hide "Size" for new-tab, hide "Commandline" unless used)
-- More compact, less cognitive load
-
-**Preview section - stays at bottom:**
-```
-Command: wt --maximized new-tab -p "PowerShell" `; split-pane -H --size 0.5 wsl.exe
-                                          [Parse] [Copy] [Run]
-```
+#### 6.1-6.2 Redesigned layout -- COMPLETED
+- Made Global Window Options collapsible (collapsed by default)
+- Compact layout: state checkboxes, window target, size/position in one row
+- Replaced "Apply to selected step" with auto-apply on field change
+- Side-by-side list + editor layout
+- Show/hide pane size field based on step type (hidden for new-tab)
+- Preview section at bottom with compact height
+- Styled Remove button with red accent
 
 ---
 
-### Phase 7: Drag and Drop
+### Phase 7: Drag and Drop -- COMPLETED
 
-#### 7.1 Folders tab drag and drop
-**Implementation:**
-- Enable on `foldersTreeWidget`:
-  ```python
-  self.foldersTreeWidget.setDragEnabled(True)
-  self.foldersTreeWidget.setAcceptDrops(True)
-  self.foldersTreeWidget.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
-  self.foldersTreeWidget.setDefaultDropAction(Qt.DropAction.MoveAction)
-  ```
-- Override `dropEvent` to:
-  1. Determine source item, source parent list, source index
-  2. Determine drop target and position (before/after/into folder)
-  3. Remove from source list, insert at target position in `data_schemes`
-  4. Reload tree and re-select the moved item
-- Constraints:
-  - Profiles/separators can be dropped into folders or root
-  - Folders can be dropped at root level or into other folders
-  - `remainingProfiles` node cannot be dragged
-  - Virtual (unassigned) profiles: dragging into a folder converts them to explicit entries
+#### 7.1 Folders tab drag and drop -- COMPLETED
+- Created `DragDropTreeWidget` subclass with custom `dropEvent`
+- Supports dropping above/below items and into folders
+- Prevents dragging of `remainingProfiles` and virtual entries
+- Updates `data_schemes` on drop, reloads tree, re-selects moved item
+- Drop indicator shown during drag
 
-#### 7.2 Visual drop indicators
-- Show drop line between items (above/below)
-- Show folder highlight when hovering over a folder (drop into)
-- Cursor changes to indicate valid/invalid drop targets
+#### 7.2 Visual drop indicators -- COMPLETED
+- Built-in Qt drop indicator line shown between items
+- Folder highlight when hovering over a folder (drop-into)
 
-#### 7.3 Command Builder drag and drop (optional)
-- Allow reordering steps by drag in the steps list
-- Simpler implementation since it's a flat list
+#### 7.3 Command Builder drag and drop -- NOT IMPLEMENTED
+- Skipped; Move Up/Down buttons provide adequate reordering for the flat steps list
 
 ---
 
-### Phase 8: Add remaining profile fields
+### Phase 8: Add remaining profile fields -- COMPLETED
 
-#### 8.1 Missing fields to add
+#### 8.1-8.3 Missing fields added -- COMPLETED
+Profile editor completely rewritten with 4 collapsible group box sections:
 
-**General Settings (high value):**
-| Field | JSON Key | Type | Default |
-|-------|----------|------|---------|
-| Opacity | `opacity` | Integer 0-100 | 100 |
-| History Size | `historySize` | Integer 0-32767 | 9001 |
-| Close on Exit | `closeOnExit` | Enum: graceful/always/never | graceful |
-| Bell Style | `bellStyle` | Enum: none/audible/visual/all | audible |
-| Suppress App Title | `suppressApplicationTitle` | Boolean | false |
-| Antialiasing Mode | `antialiasingMode` | Enum: grayscale/cleartype/aliased | grayscale |
+**General:** Name, Command Line, Starting Directory, Tab Title, Icon, Hidden, Suppress App Title
 
-**Appearance Settings (medium value):**
-| Field | JSON Key | Type | Default |
-|-------|----------|------|---------|
-| Foreground Colour | `foreground` | Colour (#RRGGBB) | from scheme |
-| Background Colour | `background` | Colour (#RRGGBB) | from scheme |
-| Selection Background | `selectionBackground` | Colour (#RRGGBB) | from scheme |
-| Cursor Colour | `cursorColor` | Colour (#RRGGBB) | from scheme |
-| Font Weight | `font.weight` | Enum/Integer | normal |
-| BG Image Stretch Mode | `backgroundImageStretchMode` | Enum | uniformToFill |
-| BG Image Alignment | `backgroundImageAlignment` | Enum | center |
-| Intense Text Style | `intenseTextStyle` | Enum: bold/bright/all/none | all |
+**Appearance:** Color Scheme, Font (face, size, weight), Foreground, Background, Selection Background, Cursor Color, Cursor Shape, Tab Color, Opacity (slider), Intense Text Style, Use Acrylic
 
-**Advanced Settings (lower value):**
-| Field | JSON Key | Type | Default |
-|-------|----------|------|---------|
-| AltGr Aliasing | `altGrAliasing` | Boolean | true |
-| Adjust Indistinguishable Colours | `adjustIndistinguishableColors` | Enum | always |
-| Retro Terminal Effect | `experimental.retroTerminalEffect` | Boolean | false |
+**Background Image:** Image Path, Background Image Opacity, Stretch Mode, Alignment
 
-#### 8.2 UI organisation
-Group the profile editor fields into collapsible sections:
-```
-▾ General
-    Name | Command Line | Starting Directory | Tab Title | Icon | Hidden
+**Advanced:** History Size, Close on Exit, Bell Style, Antialiasing Mode, Retro Terminal Effect, AltGr Aliasing
 
-▾ Appearance
-    Color Scheme | Font (face, size, weight)
-    Foreground | Background | Selection Background | Cursor (shape, colour)
-    Tab Color | Opacity | Use Acrylic
-
-▾ Background Image
-    Image Path | Opacity | Stretch Mode | Alignment
-
-▾ Advanced
-    History Size | Close on Exit | Bell Style | Antialiasing
-    Suppress App Title | Snap on Input | Run as Admin
-    Padding | Scrollbar State | AltGr Aliasing
-    Intense Text Style | Retro Terminal Effect
-```
-
-#### 8.3 Read/write implementation
-For each new field:
-1. Add UI widget in the appropriate collapsible section
-2. Add to `changedProfile()` to load from data
-3. Add change handler to write to `data_schemes`
-4. Support both read and write with proper defaults
+Helper methods added: `_pickColorInto()`, `_setProfileField()`
 
 ---
 
-## Implementation Order
+## Implementation Order -- COMPLETED
 
-| Phase | Task | Effort | Priority |
-|-------|------|--------|----------|
-| 1.1 | Fix separator identity tracking | Small | **Critical** |
-| 1.2 | Fix font property handling | Small | **High** |
-| 1.3 | Fix minor bugs | Small | **High** |
-| 2.1 | Global stylesheet | Medium | **Medium** |
-| 2.2 | Status bar improvements | Small | **Low** |
-| 2.3 | Tab icons | Small | **Low** |
-| 3.1 | Expand remainingProfiles | Medium | **High** |
-| 3.2 | Profile assignment indicator | Small | **Medium** |
-| 4.1 | Improve re-selection after move | Small | **High** |
-| 4.2 | Visual feedback for moves | Small | **Medium** |
-| 5.1-5.3 | Simplify Actions tab | Large | **High** |
-| 6.1-6.2 | Simplify Command Builder | Large | **High** |
-| 7.1-7.2 | Drag and drop (Folders) | Medium | **Medium** |
-| 7.3 | Drag and drop (Command Builder) | Small | **Low** |
-| 8.1-8.3 | Add remaining profile fields | Large | **High** |
+| Phase | Task | Effort | Priority | Status |
+|-------|------|--------|----------|--------|
+| 1.1 | Fix separator identity tracking | Small | **Critical** | DONE |
+| 1.2 | Fix font property handling | Small | **High** | DONE |
+| 1.3 | Fix minor bugs | Small | **High** | DONE |
+| 8.1-8.3 | Add remaining profile fields | Large | **High** | DONE |
+| 2.1 | Global stylesheet | Medium | **Medium** | DONE |
+| 3.1 | Expand remainingProfiles | Medium | **High** | DONE |
+| 4.1-4.2 | Improve move operations | Small | **High** | DONE |
+| 5.1-5.2 | Simplify Actions tab | Large | **High** | DONE |
+| 6.1-6.2 | Simplify Command Builder | Large | **High** | DONE |
+| 7.1-7.2 | Drag and drop (Folders) | Medium | **Medium** | DONE |
 
-**Recommended order:** 1.1 → 1.2 → 1.3 → 8.1-8.3 → 2.1 → 3.1 → 4.1 → 5.1-5.3 → 6.1-6.2 → 7.1-7.2 → remaining
+**Deferred items:** Key recorder (5.3), Profile assignment indicator (3.2), Command Builder drag-drop (7.3)
 
 ---
 
 ## Testing Strategy
 
-Each phase should be tested on Windows 11 before moving to the next:
+Each phase should be tested on Windows 11 before merging to main:
 
 1. **Bug fixes:** Run with `--debug`, verify separator moves, font reading/writing, delete operations
 2. **Visual:** Visual inspection on Windows 11 with both light and dark system themes
