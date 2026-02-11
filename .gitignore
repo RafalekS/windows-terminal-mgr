@@ -19,6 +19,8 @@ ENV/
 
 # Claude Code local settings
 .claude/settings.local.json
+CLAUDE.md
+.claude/
 
 # Logs
 log/
