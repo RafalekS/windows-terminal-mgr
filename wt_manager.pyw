@@ -282,104 +282,215 @@ class Ui_MainWindow(object):
         scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
         scroll_widget = QtWidgets.QWidget()
-        scroll_layout = QtWidgets.QFormLayout(scroll_widget)
-        scroll_layout.setSpacing(10)
+        scroll_main = QtWidgets.QVBoxLayout(scroll_widget)
+        scroll_main.setSpacing(6)
 
-        # Profile details fields
+        # Helper to create a color field with picker button
+        def makeColorRow(edit_attr, placeholder="#RRGGBB"):
+            layout = QtWidgets.QHBoxLayout()
+            edit = QtWidgets.QLineEdit()
+            edit.setPlaceholderText(placeholder)
+            btn = QtWidgets.QPushButton("Pick...")
+            btn.setMaximumWidth(80)
+            btn.clicked.connect(lambda: self._pickColorInto(edit))
+            layout.addWidget(edit)
+            layout.addWidget(btn)
+            setattr(self, edit_attr, edit)
+            return layout
+
+        # ── General Section ──
+        general_group = QtWidgets.QGroupBox("General")
+        general_layout = QtWidgets.QFormLayout(general_group)
+        general_layout.setSpacing(6)
+
         self.profileNameEdit = QtWidgets.QLineEdit()
         self.profileNameEdit.setReadOnly(True)
-        scroll_layout.addRow("Profile Name:", self.profileNameEdit)
+        general_layout.addRow("Profile Name:", self.profileNameEdit)
+
+        self.commandLineEdit = QtWidgets.QLineEdit()
+        general_layout.addRow("Command Line:", self.commandLineEdit)
+
+        self.startingDirectoryEdit = QtWidgets.QLineEdit()
+        general_layout.addRow("Starting Directory:", self.startingDirectoryEdit)
+
+        self.tabTitleEdit = QtWidgets.QLineEdit()
+        general_layout.addRow("Tab Title:", self.tabTitleEdit)
+
+        tab_color_layout = makeColorRow('tabColorEdit')
+        general_layout.addRow("Tab Color:", tab_color_layout)
+
+        icon_layout = QtWidgets.QHBoxLayout()
+        self.iconEdit = QtWidgets.QLineEdit()
+        self.iconBrowseButton = QtWidgets.QPushButton("Browse...")
+        self.iconBrowseButton.setMaximumWidth(80)
+        icon_layout.addWidget(self.iconEdit)
+        icon_layout.addWidget(self.iconBrowseButton)
+        general_layout.addRow("Icon:", icon_layout)
+
+        checks_layout = QtWidgets.QHBoxLayout()
+        self.hiddenCheckBox = QtWidgets.QCheckBox("Hidden")
+        self.runAsAdminCheckBox = QtWidgets.QCheckBox("Run as Admin")
+        self.suppressTitleCheckBox = QtWidgets.QCheckBox("Suppress App Title")
+        checks_layout.addWidget(self.hiddenCheckBox)
+        checks_layout.addWidget(self.runAsAdminCheckBox)
+        checks_layout.addWidget(self.suppressTitleCheckBox)
+        checks_layout.addStretch()
+        general_layout.addRow("", checks_layout)
+
+        scroll_main.addWidget(general_group)
+
+        # ── Appearance Section ──
+        appearance_group = QtWidgets.QGroupBox("Appearance")
+        appearance_layout = QtWidgets.QFormLayout(appearance_group)
+        appearance_layout.setSpacing(6)
 
         self.comboBox = QtWidgets.QComboBox()
         for item in data_list:
             self.comboBox.addItem(item)
-        scroll_layout.addRow("Color Scheme:", self.comboBox)
+        appearance_layout.addRow("Color Scheme:", self.comboBox)
 
-        # Font selection
+        # Font row: face + size + weight
         font_layout = QtWidgets.QHBoxLayout()
         self.fontBox = QtWidgets.QComboBox()
-        self.fontBox.setMinimumWidth(200)
+        self.fontBox.setMinimumWidth(180)
         for item in font_list:
             self.fontBox.addItem(item)
         self.fontSize = QtWidgets.QSpinBox()
         self.fontSize.setMinimum(4)
         self.fontSize.setMaximum(72)
         self.fontSize.setValue(12)
-        font_layout.addWidget(self.fontBox)
+        self.fontWeightBox = QtWidgets.QComboBox()
+        self.fontWeightBox.addItems(["normal", "thin", "extra-light", "light", "semi-light",
+                                     "medium", "semi-bold", "bold", "extra-bold", "black"])
+        font_layout.addWidget(self.fontBox, 3)
         font_layout.addWidget(QtWidgets.QLabel("Size:"))
-        font_layout.addWidget(self.fontSize)
-        font_layout.addStretch()
-        scroll_layout.addRow("Font:", font_layout)
+        font_layout.addWidget(self.fontSize, 1)
+        font_layout.addWidget(QtWidgets.QLabel("Weight:"))
+        font_layout.addWidget(self.fontWeightBox, 1)
+        appearance_layout.addRow("Font:", font_layout)
 
-        # Background image
-        bg_layout = QtWidgets.QHBoxLayout()
+        # Cursor row: shape + color
+        cursor_layout = QtWidgets.QHBoxLayout()
+        self.cursorShapeBox = QtWidgets.QComboBox()
+        self.cursorShapeBox.addItems(["bar", "vintage", "underscore", "filledBox", "emptyBox", "doubleUnderscore"])
+        cursor_layout.addWidget(self.cursorShapeBox, 2)
+        cursor_layout.addWidget(QtWidgets.QLabel("Color:"))
+        self.cursorColorEdit = QtWidgets.QLineEdit()
+        self.cursorColorEdit.setPlaceholderText("#RRGGBB")
+        cursor_color_btn = QtWidgets.QPushButton("Pick...")
+        cursor_color_btn.setMaximumWidth(80)
+        cursor_color_btn.clicked.connect(lambda: self._pickColorInto(self.cursorColorEdit))
+        cursor_layout.addWidget(self.cursorColorEdit, 2)
+        cursor_layout.addWidget(cursor_color_btn)
+        appearance_layout.addRow("Cursor:", cursor_layout)
+
+        # Color overrides
+        fg_layout = makeColorRow('foregroundEdit')
+        appearance_layout.addRow("Foreground:", fg_layout)
+
+        bg_color_layout = makeColorRow('backgroundColorEdit')
+        appearance_layout.addRow("Background:", bg_color_layout)
+
+        sel_layout = makeColorRow('selectionBackgroundEdit')
+        appearance_layout.addRow("Selection BG:", sel_layout)
+
+        # Opacity + acrylic
+        opacity_row = QtWidgets.QHBoxLayout()
+        self.opacitySlider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.opacitySlider.setMinimum(0)
+        self.opacitySlider.setMaximum(100)
+        self.opacitySlider.setValue(100)
+        self.opacityValueLabel = QtWidgets.QLabel("100")
+        self.useAcrylicCheckBox = QtWidgets.QCheckBox("Acrylic")
+        opacity_row.addWidget(self.opacitySlider, 3)
+        opacity_row.addWidget(self.opacityValueLabel)
+        opacity_row.addWidget(self.useAcrylicCheckBox)
+        appearance_layout.addRow("Opacity:", opacity_row)
+
+        self.intenseTextBox = QtWidgets.QComboBox()
+        self.intenseTextBox.addItems(["all", "bold", "bright", "none"])
+        appearance_layout.addRow("Intense Text:", self.intenseTextBox)
+
+        scroll_main.addWidget(appearance_group)
+
+        # ── Background Image Section ──
+        bgimg_group = QtWidgets.QGroupBox("Background Image")
+        bgimg_layout = QtWidgets.QFormLayout(bgimg_group)
+        bgimg_layout.setSpacing(6)
+
+        bg_path_layout = QtWidgets.QHBoxLayout()
         self.backgroundImageEdit = QtWidgets.QLineEdit()
-        self.backgroundImageEdit.setReadOnly(False)
         self.pushButton = QtWidgets.QPushButton("Browse...")
-        bg_layout.addWidget(self.backgroundImageEdit)
-        bg_layout.addWidget(self.pushButton)
-        scroll_layout.addRow("Background Image:", bg_layout)
+        self.pushButton.setMaximumWidth(80)
+        bg_path_layout.addWidget(self.backgroundImageEdit)
+        bg_path_layout.addWidget(self.pushButton)
+        bgimg_layout.addRow("Image Path:", bg_path_layout)
 
-        # Opacity slider
-        opacity_layout = QtWidgets.QHBoxLayout()
+        bgimg_opts = QtWidgets.QHBoxLayout()
         self.horizontalSlider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.horizontalSlider.setMaximum(10)
         self.horizontalSlider.setValue(10)
-        self.opacityValueLabel = QtWidgets.QLabel("1.0")
-        opacity_layout.addWidget(self.horizontalSlider)
-        opacity_layout.addWidget(self.opacityValueLabel)
-        scroll_layout.addRow("Background Opacity:", opacity_layout)
+        self.bgOpacityLabel = QtWidgets.QLabel("1.0")
+        bgimg_opts.addWidget(self.horizontalSlider, 2)
+        bgimg_opts.addWidget(self.bgOpacityLabel)
+        bgimg_opts.addWidget(QtWidgets.QLabel("Stretch:"))
+        self.bgStretchBox = QtWidgets.QComboBox()
+        self.bgStretchBox.addItems(["uniformToFill", "none", "fill", "uniform"])
+        bgimg_opts.addWidget(self.bgStretchBox, 1)
+        bgimg_opts.addWidget(QtWidgets.QLabel("Align:"))
+        self.bgAlignBox = QtWidgets.QComboBox()
+        self.bgAlignBox.addItems(["center", "left", "top", "right", "bottom",
+                                   "topLeft", "topRight", "bottomLeft", "bottomRight"])
+        bgimg_opts.addWidget(self.bgAlignBox, 1)
+        bgimg_layout.addRow("Opacity:", bgimg_opts)
 
-        # Text fields
-        self.commandLineEdit = QtWidgets.QLineEdit()
-        scroll_layout.addRow("Command Line:", self.commandLineEdit)
+        scroll_main.addWidget(bgimg_group)
 
-        self.startingDirectoryEdit = QtWidgets.QLineEdit()
-        scroll_layout.addRow("Starting Directory:", self.startingDirectoryEdit)
+        # ── Advanced Section ──
+        advanced_group = QtWidgets.QGroupBox("Advanced")
+        advanced_group.setCheckable(True)
+        advanced_group.setChecked(False)
+        advanced_layout = QtWidgets.QFormLayout(advanced_group)
+        advanced_layout.setSpacing(6)
 
-        self.tabTitleEdit = QtWidgets.QLineEdit()
-        scroll_layout.addRow("Tab Title:", self.tabTitleEdit)
+        self.historySizeSpinBox = QtWidgets.QSpinBox()
+        self.historySizeSpinBox.setMinimum(0)
+        self.historySizeSpinBox.setMaximum(32767)
+        self.historySizeSpinBox.setValue(9001)
+        advanced_layout.addRow("History Size:", self.historySizeSpinBox)
 
-        # Tab Color field with color picker button
-        tab_color_layout = QtWidgets.QHBoxLayout()
-        self.tabColorEdit = QtWidgets.QLineEdit()
-        self.tabColorEdit.setPlaceholderText("#RRGGBB or #RGB")
-        self.tabColorPickButton = QtWidgets.QPushButton("Pick Color...")
-        self.tabColorPickButton.setMaximumWidth(120)
-        tab_color_layout.addWidget(self.tabColorEdit)
-        tab_color_layout.addWidget(self.tabColorPickButton)
-        scroll_layout.addRow("Tab Color:", tab_color_layout)
+        self.closeOnExitBox = QtWidgets.QComboBox()
+        self.closeOnExitBox.addItems(["graceful", "always", "never"])
+        advanced_layout.addRow("Close on Exit:", self.closeOnExitBox)
 
-        # Icon field with browse button
-        icon_layout = QtWidgets.QHBoxLayout()
-        self.iconEdit = QtWidgets.QLineEdit()
-        self.iconBrowseButton = QtWidgets.QPushButton("Browse...")
-        icon_layout.addWidget(self.iconEdit)
-        icon_layout.addWidget(self.iconBrowseButton)
-        scroll_layout.addRow("Icon:", icon_layout)
+        self.bellStyleBox = QtWidgets.QComboBox()
+        self.bellStyleBox.addItems(["audible", "none", "visual", "all"])
+        advanced_layout.addRow("Bell Style:", self.bellStyleBox)
 
-        self.paddingEdit = QtWidgets.QLineEdit()
-        scroll_layout.addRow("Padding:", self.paddingEdit)
-
-        # Dropdowns
-        self.cursorShapeBox = QtWidgets.QComboBox()
-        self.cursorShapeBox.addItems(["bar", "vintage", "underscore", "filledBox", "emptyBox", "doubleUnderscore"])
-        scroll_layout.addRow("Cursor Shape:", self.cursorShapeBox)
+        self.antialiasingBox = QtWidgets.QComboBox()
+        self.antialiasingBox.addItems(["grayscale", "cleartype", "aliased"])
+        advanced_layout.addRow("Antialiasing:", self.antialiasingBox)
 
         self.scrollbarBox = QtWidgets.QComboBox()
         self.scrollbarBox.addItems(["visible", "hidden"])
-        scroll_layout.addRow("Scrollbar State:", self.scrollbarBox)
+        advanced_layout.addRow("Scrollbar:", self.scrollbarBox)
 
-        # Checkboxes
-        self.runAsAdminCheckBox = QtWidgets.QCheckBox("Run as Administrator")
-        self.useAcrylicCheckBox = QtWidgets.QCheckBox("Use Acrylic")
-        self.hiddenCheckBox = QtWidgets.QCheckBox("Hidden")
-        self.snapOnInputCheckBox = QtWidgets.QCheckBox("Snap On Input")
+        self.paddingEdit = QtWidgets.QLineEdit()
+        self.paddingEdit.setPlaceholderText("e.g. 8 or 8,8,8,8")
+        advanced_layout.addRow("Padding:", self.paddingEdit)
 
-        scroll_layout.addRow("", self.runAsAdminCheckBox)
-        scroll_layout.addRow("", self.useAcrylicCheckBox)
-        scroll_layout.addRow("", self.hiddenCheckBox)
-        scroll_layout.addRow("", self.snapOnInputCheckBox)
+        adv_checks = QtWidgets.QHBoxLayout()
+        self.snapOnInputCheckBox = QtWidgets.QCheckBox("Snap on Input")
+        self.retroEffectCheckBox = QtWidgets.QCheckBox("Retro Terminal Effect")
+        self.altGrCheckBox = QtWidgets.QCheckBox("AltGr Aliasing")
+        adv_checks.addWidget(self.snapOnInputCheckBox)
+        adv_checks.addWidget(self.retroEffectCheckBox)
+        adv_checks.addWidget(self.altGrCheckBox)
+        adv_checks.addStretch()
+        advanced_layout.addRow("", adv_checks)
+
+        scroll_main.addWidget(advanced_group)
+        scroll_main.addStretch()
 
         scroll_area.setWidget(scroll_widget)
         right_layout.addWidget(scroll_area)
@@ -391,22 +502,37 @@ class Ui_MainWindow(object):
         self.comboBox.activated.connect(self.changeScheme)
         self.fontBox.activated.connect(self.changeFont)
         self.fontSize.valueChanged.connect(self.changeFontSize)
+        self.fontWeightBox.textActivated.connect(self.changeFontWeight)
         self.pushButton.clicked.connect(self.changeBackgroundImage)
-        self.horizontalSlider.sliderReleased.connect(self.changeOpacity)
+        self.horizontalSlider.sliderReleased.connect(self.changeBgImageOpacity)
         self.commandLineEdit.textChanged.connect(self.changeCommandLine)
         self.startingDirectoryEdit.textChanged.connect(self.changeStartingDirectory)
         self.tabTitleEdit.textChanged.connect(self.changeTabTitle)
         self.tabColorEdit.textChanged.connect(self.changeTabColor)
-        self.tabColorPickButton.clicked.connect(self.pickTabColor)
         self.iconEdit.textChanged.connect(self.changeIcon)
         self.iconBrowseButton.clicked.connect(self.browseIcon)
         self.paddingEdit.textChanged.connect(self.changePadding)
         self.cursorShapeBox.textActivated.connect(self.changeCursorShape)
+        self.cursorColorEdit.textChanged.connect(self.changeCursorColor)
         self.scrollbarBox.textActivated.connect(self.changeScrollbarState)
         self.runAsAdminCheckBox.stateChanged.connect(self.changeRunAsAdmin)
         self.useAcrylicCheckBox.stateChanged.connect(self.changeUseAcrylic)
         self.hiddenCheckBox.stateChanged.connect(self.changeHidden)
         self.snapOnInputCheckBox.stateChanged.connect(self.changeSnapOnInput)
+        self.suppressTitleCheckBox.stateChanged.connect(self.changeSuppressTitle)
+        self.foregroundEdit.textChanged.connect(self.changeForeground)
+        self.backgroundColorEdit.textChanged.connect(self.changeBackgroundColor)
+        self.selectionBackgroundEdit.textChanged.connect(self.changeSelectionBackground)
+        self.opacitySlider.sliderReleased.connect(self.changeOpacity)
+        self.intenseTextBox.textActivated.connect(self.changeIntenseText)
+        self.bgStretchBox.textActivated.connect(self.changeBgStretchMode)
+        self.bgAlignBox.textActivated.connect(self.changeBgAlignment)
+        self.historySizeSpinBox.valueChanged.connect(self.changeHistorySize)
+        self.closeOnExitBox.textActivated.connect(self.changeCloseOnExit)
+        self.bellStyleBox.textActivated.connect(self.changeBellStyle)
+        self.antialiasingBox.textActivated.connect(self.changeAntialiasing)
+        self.retroEffectCheckBox.stateChanged.connect(self.changeRetroEffect)
+        self.altGrCheckBox.stateChanged.connect(self.changeAltGr)
         self.defaultButton.clicked.connect(self.changeDefault)
         self.moveUpButton.clicked.connect(self.moveProfileUp)
         self.moveDownButton.clicked.connect(self.moveProfileDown)
@@ -917,6 +1043,35 @@ Tips:
 
     # ========== Profile Tab Methods ==========
 
+    def _pickColorInto(self, line_edit):
+        """Open color dialog and put result into a QLineEdit"""
+        col = QtWidgets.QColorDialog.getColor()
+        if col.isValid():
+            line_edit.setText(col.name())
+
+    def _setProfileField(self, key, value, sub_key=None):
+        """Set a profile field value. If value is empty/None/False-ish, remove the key."""
+        idx = self.getCurrentIndex()
+        if idx < 0:
+            return
+        profile = data_schemes['profiles']['list'][idx]
+        if sub_key:
+            if value:
+                if key not in profile:
+                    profile[key] = {}
+                profile[key][sub_key] = value
+            else:
+                if key in profile and sub_key in profile[key]:
+                    del profile[key][sub_key]
+                    if not profile[key]:
+                        del profile[key]
+        else:
+            if value is not None and value != '':
+                profile[key] = value
+            else:
+                profile.pop(key, None)
+        self.setUnsavedChanges()
+
     def setUnsavedChanges(self):
         self.unsaved_changes = True
         self.statusLabel.setText("Unsaved changes - Click Save to apply")
@@ -966,13 +1121,13 @@ Tips:
             profile.pop('fontFace', None)
             self.setUnsavedChanges()
 
-    def changeOpacity(self):
+    def changeBgImageOpacity(self):
         currentProfileIndex = self.getCurrentIndex()
         if currentProfileIndex >= 0:
             sliderValue = self.horizontalSlider.value()
             opacity = sliderValue / 10
             data_schemes["profiles"]["list"][currentProfileIndex]["backgroundImageOpacity"] = opacity
-            self.opacityValueLabel.setText(str(opacity))
+            self.bgOpacityLabel.setText(str(opacity))
             self.setUnsavedChanges()
 
     def changeBackgroundImage(self):
@@ -1029,11 +1184,6 @@ Tips:
             elif 'tabColor' in data_schemes['profiles']['list'][currentProfileIndex]:
                 del data_schemes['profiles']['list'][currentProfileIndex]['tabColor']
             self.setUnsavedChanges()
-
-    def pickTabColor(self):
-        col = QtWidgets.QColorDialog.getColor()
-        if col.isValid():
-            self.tabColorEdit.setText(col.name())
 
     def changeIcon(self, text):
         if not self.ui_initialized:
@@ -1093,6 +1243,73 @@ Tips:
             data_schemes['profiles']['list'][currentProfileIndex]['snapOnInput'] = (state == QtCore.Qt.CheckState.Checked.value)
             self.setUnsavedChanges()
 
+    def changeFontWeight(self, text):
+        self._setProfileField('font', text if text != 'normal' else None, 'weight')
+
+    def changeSuppressTitle(self, state):
+        val = state == QtCore.Qt.CheckState.Checked.value
+        self._setProfileField('suppressApplicationTitle', val if val else None)
+
+    def changeForeground(self, text):
+        if not self.ui_initialized:
+            return
+        self._setProfileField('foreground', text.strip() if text.strip() else None)
+
+    def changeBackgroundColor(self, text):
+        if not self.ui_initialized:
+            return
+        self._setProfileField('background', text.strip() if text.strip() else None)
+
+    def changeSelectionBackground(self, text):
+        if not self.ui_initialized:
+            return
+        self._setProfileField('selectionBackground', text.strip() if text.strip() else None)
+
+    def changeCursorColor(self, text):
+        if not self.ui_initialized:
+            return
+        self._setProfileField('cursorColor', text.strip() if text.strip() else None)
+
+    def changeOpacity(self):
+        idx = self.getCurrentIndex()
+        if idx >= 0:
+            val = self.opacitySlider.value()
+            self.opacityValueLabel.setText(str(val))
+            data_schemes['profiles']['list'][idx]['opacity'] = val
+            self.setUnsavedChanges()
+
+    def changeIntenseText(self, text):
+        self._setProfileField('intenseTextStyle', text if text != 'all' else None)
+
+    def changeBgStretchMode(self, text):
+        self._setProfileField('backgroundImageStretchMode', text if text != 'uniformToFill' else None)
+
+    def changeBgAlignment(self, text):
+        self._setProfileField('backgroundImageAlignment', text if text != 'center' else None)
+
+    def changeHistorySize(self, value):
+        if not self.ui_initialized:
+            return
+        self._setProfileField('historySize', value if value != 9001 else None)
+
+    def changeCloseOnExit(self, text):
+        self._setProfileField('closeOnExit', text if text != 'graceful' else None)
+
+    def changeBellStyle(self, text):
+        self._setProfileField('bellStyle', text if text != 'audible' else None)
+
+    def changeAntialiasing(self, text):
+        self._setProfileField('antialiasingMode', text if text != 'grayscale' else None)
+
+    def changeRetroEffect(self, state):
+        val = state == QtCore.Qt.CheckState.Checked.value
+        self._setProfileField('experimental.retroTerminalEffect', val if val else None)
+
+    def changeAltGr(self, state):
+        val = state == QtCore.Qt.CheckState.Checked.value
+        # altGrAliasing defaults to True, only write if False
+        self._setProfileField('altGrAliasing', False if not val else None)
+
     def changedProfile(self):
         if not self.ui_initialized:
             return
@@ -1130,49 +1347,91 @@ Tips:
             fontSize = profile.get('fontSize', 12)
         self.fontSize.setValue(fontSize)
 
-        # Update background image
-        self.backgroundImageEdit.setText(profile.get('backgroundImage', ''))
-
-        # Update opacity
-        opacity = profile.get('backgroundImageOpacity', 1.0)
-        self.horizontalSlider.setValue(int(opacity * 10))
-        self.opacityValueLabel.setText(str(opacity))
-
-        # Update command line
+        # General fields
         self.commandLineEdit.setText(profile.get('commandline', ''))
-
-        # Update starting directory
         self.startingDirectoryEdit.setText(profile.get('startingDirectory', ''))
-
-        # Update tab title
         self.tabTitleEdit.setText(profile.get('tabTitle', ''))
-
-        # Update tab color
         self.tabColorEdit.setText(profile.get('tabColor', ''))
-
-        # Update icon
         self.iconEdit.setText(profile.get('icon', ''))
+        self.hiddenCheckBox.setChecked(profile.get('hidden', False))
+        self.runAsAdminCheckBox.setChecked(profile.get('elevate', False))
+        self.suppressTitleCheckBox.setChecked(profile.get('suppressApplicationTitle', False))
 
-        # Update padding
-        self.paddingEdit.setText(profile.get('padding', ''))
+        # Appearance fields
+        # Font weight
+        fontWeight = font_obj.get('weight', 'normal') if isinstance(font_obj, dict) else 'normal'
+        idx_w = self.fontWeightBox.findText(str(fontWeight), QtCore.Qt.MatchFlag.MatchFixedString)
+        if idx_w >= 0:
+            self.fontWeightBox.setCurrentIndex(idx_w)
+        else:
+            self.fontWeightBox.setCurrentIndex(0)
 
-        # Update cursor shape
+        # Cursor
         cursorShape = profile.get('cursorShape', 'bar')
         index = self.cursorShapeBox.findText(cursorShape, QtCore.Qt.MatchFlag.MatchFixedString)
         if index >= 0:
             self.cursorShapeBox.setCurrentIndex(index)
+        self.cursorColorEdit.setText(profile.get('cursorColor', ''))
 
-        # Update scrollbar state
+        # Color overrides
+        self.foregroundEdit.setText(profile.get('foreground', ''))
+        self.backgroundColorEdit.setText(profile.get('background', ''))
+        self.selectionBackgroundEdit.setText(profile.get('selectionBackground', ''))
+
+        # Opacity (window transparency, 0-100)
+        self.opacitySlider.setValue(profile.get('opacity', 100))
+        self.opacityValueLabel.setText(str(profile.get('opacity', 100)))
+        self.useAcrylicCheckBox.setChecked(profile.get('useAcrylic', False))
+
+        # Intense text
+        intenseText = profile.get('intenseTextStyle', 'all')
+        idx_it = self.intenseTextBox.findText(intenseText, QtCore.Qt.MatchFlag.MatchFixedString)
+        if idx_it >= 0:
+            self.intenseTextBox.setCurrentIndex(idx_it)
+
+        # Background image
+        self.backgroundImageEdit.setText(profile.get('backgroundImage', ''))
+        bgOpacity = profile.get('backgroundImageOpacity', 1.0)
+        self.horizontalSlider.setValue(int(bgOpacity * 10))
+        self.bgOpacityLabel.setText(str(bgOpacity))
+
+        bgStretch = profile.get('backgroundImageStretchMode', 'uniformToFill')
+        idx_s = self.bgStretchBox.findText(bgStretch, QtCore.Qt.MatchFlag.MatchFixedString)
+        if idx_s >= 0:
+            self.bgStretchBox.setCurrentIndex(idx_s)
+
+        bgAlign = profile.get('backgroundImageAlignment', 'center')
+        idx_a = self.bgAlignBox.findText(bgAlign, QtCore.Qt.MatchFlag.MatchFixedString)
+        if idx_a >= 0:
+            self.bgAlignBox.setCurrentIndex(idx_a)
+
+        # Advanced fields
+        self.historySizeSpinBox.setValue(profile.get('historySize', 9001))
+
+        closeOnExit = profile.get('closeOnExit', 'graceful')
+        idx_c = self.closeOnExitBox.findText(str(closeOnExit), QtCore.Qt.MatchFlag.MatchFixedString)
+        if idx_c >= 0:
+            self.closeOnExitBox.setCurrentIndex(idx_c)
+
+        bellStyle = profile.get('bellStyle', 'audible')
+        idx_b = self.bellStyleBox.findText(bellStyle, QtCore.Qt.MatchFlag.MatchFixedString)
+        if idx_b >= 0:
+            self.bellStyleBox.setCurrentIndex(idx_b)
+
+        antialiasing = profile.get('antialiasingMode', 'grayscale')
+        idx_aa = self.antialiasingBox.findText(antialiasing, QtCore.Qt.MatchFlag.MatchFixedString)
+        if idx_aa >= 0:
+            self.antialiasingBox.setCurrentIndex(idx_aa)
+
         scrollbarState = profile.get('scrollbarState', 'visible')
         index = self.scrollbarBox.findText(scrollbarState, QtCore.Qt.MatchFlag.MatchFixedString)
         if index >= 0:
             self.scrollbarBox.setCurrentIndex(index)
 
-        # Update checkboxes
-        self.runAsAdminCheckBox.setChecked(profile.get('elevate', False))
-        self.useAcrylicCheckBox.setChecked(profile.get('useAcrylic', False))
-        self.hiddenCheckBox.setChecked(profile.get('hidden', False))
+        self.paddingEdit.setText(profile.get('padding', ''))
         self.snapOnInputCheckBox.setChecked(profile.get('snapOnInput', True))
+        self.retroEffectCheckBox.setChecked(profile.get('experimental.retroTerminalEffect', False))
+        self.altGrCheckBox.setChecked(profile.get('altGrAliasing', True))
 
         # Re-enable ui_initialized
         self.ui_initialized = True
