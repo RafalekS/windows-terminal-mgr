@@ -6,6 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Windows Terminal Manager** - A PyQt6 GUI application for managing Windows Terminal settings, profiles, color schemes, keybindings, and command generation. Provides visual editing of the Windows Terminal `settings.json` file.
 
+This is a  Windows GUI application that is being developed on Linux system but will be run on Windows 11.
+After changes to project files you must commit and push to remote repo so user can then pull on his local machine and test.
+
 ## Running the Application
 
 ```bash
