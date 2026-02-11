@@ -555,121 +555,112 @@ class Ui_MainWindow(object):
             self.listWidget.setCurrentRow(0)
 
     def setupActionsTab(self):
-        # Main horizontal layout
-        main_layout = QtWidgets.QHBoxLayout(self.actionsTab)
+        main_layout = QtWidgets.QVBoxLayout(self.actionsTab)
         main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)
+        main_layout.setSpacing(8)
 
-        # Left side - Actions list
-        left_widget = QtWidgets.QWidget()
-        left_widget.setMinimumWidth(450)
-        left_layout = QtWidgets.QVBoxLayout(left_widget)
+        # Filter bar
+        filter_layout = QtWidgets.QHBoxLayout()
+        filter_layout.addWidget(QtWidgets.QLabel("Filter:"))
+        self.actionsFilterEdit = QtWidgets.QLineEdit()
+        self.actionsFilterEdit.setPlaceholderText("Type to filter actions...")
+        self.actionsFilterEdit.textChanged.connect(self.filterActions)
+        filter_layout.addWidget(self.actionsFilterEdit)
+        main_layout.addLayout(filter_layout)
 
-        actions_label = QtWidgets.QLabel("Actions & Key Bindings:")
-        actions_label.setFont(QtGui.QFont("", 10, QtGui.QFont.Weight.Bold))
-        left_layout.addWidget(actions_label)
+        # Actions table (replaces list widget)
+        self.actionsTable = QtWidgets.QTableWidget()
+        self.actionsTable.setColumnCount(4)
+        self.actionsTable.setHorizontalHeaderLabels(["Shortcut", "Name", "Command", "ID"])
+        self.actionsTable.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
+        self.actionsTable.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
+        self.actionsTable.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.actionsTable.horizontalHeader().setStretchLastSection(True)
+        self.actionsTable.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+        self.actionsTable.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeMode.Stretch)
+        self.actionsTable.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+        self.actionsTable.verticalHeader().setVisible(False)
+        self.actionsTable.setAlternatingRowColors(True)
+        main_layout.addWidget(self.actionsTable, 3)
 
-        self.actionsListWidget = QtWidgets.QListWidget()
-        self.actionsListWidget.setMinimumHeight(400)
-        left_layout.addWidget(self.actionsListWidget)
+        # Editor panel
+        editor_group = QtWidgets.QGroupBox("Edit Action")
+        editor_layout = QtWidgets.QFormLayout(editor_group)
+        editor_layout.setSpacing(6)
 
-        # Action control buttons
-        action_buttons_layout = QtWidgets.QGridLayout()
-
-        self.addActionButton = QtWidgets.QPushButton("Add Action")
-        self.updateActionButton = QtWidgets.QPushButton("Update Action")
-        self.deleteActionButton = QtWidgets.QPushButton("Delete Action")
-        self.moveActionUpButton = QtWidgets.QPushButton("Move Up")
-        self.moveActionDownButton = QtWidgets.QPushButton("Move Down")
-        self.clearFieldsButton = QtWidgets.QPushButton("Clear Fields")
-
-        action_buttons_layout.addWidget(self.addActionButton, 0, 0)
-        action_buttons_layout.addWidget(self.updateActionButton, 0, 1)
-        action_buttons_layout.addWidget(self.deleteActionButton, 1, 0)
-        action_buttons_layout.addWidget(self.clearFieldsButton, 1, 1)
-        action_buttons_layout.addWidget(self.moveActionUpButton, 2, 0)
-        action_buttons_layout.addWidget(self.moveActionDownButton, 2, 1)
-
-        left_layout.addLayout(action_buttons_layout)
-        main_layout.addWidget(left_widget)
-
-        # Right side - Action details
-        right_widget = QtWidgets.QWidget()
-        right_layout = QtWidgets.QVBoxLayout(right_widget)
-
-        # Action details group
-        details_group = QtWidgets.QGroupBox("Action Details")
-        details_layout = QtWidgets.QFormLayout(details_group)
-        details_layout.setSpacing(10)
-
-        # Action fields
-        name_id_layout = QtWidgets.QHBoxLayout()
         self.actionNameEdit = QtWidgets.QLineEdit()
-        self.actionIdEdit = QtWidgets.QLineEdit()
-        self.actionIdEdit.setPlaceholderText("e.g., User.newTab.1234")
-        name_id_layout.addWidget(self.actionNameEdit)
-        name_id_layout.addWidget(QtWidgets.QLabel("ID:"))
-        name_id_layout.addWidget(self.actionIdEdit)
-        details_layout.addRow("Action Name:", name_id_layout)
+        self.actionNameEdit.setPlaceholderText("Display name for the action")
+        editor_layout.addRow("Name:", self.actionNameEdit)
+
+        self.keysEdit = QtWidgets.QLineEdit()
+        self.keysEdit.setPlaceholderText("e.g. ctrl+shift+t  (comma-separate for multiple)")
+        editor_layout.addRow("Shortcut:", self.keysEdit)
 
         self.commandActionCombo = QtWidgets.QComboBox()
         self.commandActionCombo.setEditable(True)
         for action in COMMON_ACTIONS:
             self.commandActionCombo.addItem(action)
-        details_layout.addRow("Command:", self.commandActionCombo)
+        editor_layout.addRow("Command:", self.commandActionCombo)
 
-        self.keysEdit = QtWidgets.QLineEdit()
-        self.keysEdit.setPlaceholderText("e.g., ctrl+shift+t")
-        details_layout.addRow("Keys:", self.keysEdit)
+        # Advanced section (collapsed)
+        adv_group = QtWidgets.QGroupBox("Advanced")
+        adv_group.setCheckable(True)
+        adv_group.setChecked(False)
+        adv_layout = QtWidgets.QFormLayout(adv_group)
+        adv_layout.setSpacing(6)
+
+        self.actionIdEdit = QtWidgets.QLineEdit()
+        self.actionIdEdit.setPlaceholderText("Auto-generated if left empty")
+        adv_layout.addRow("Action ID:", self.actionIdEdit)
 
         self.actionArgsEdit = QtWidgets.QTextEdit()
-        self.actionArgsEdit.setMaximumHeight(100)
-        self.actionArgsEdit.setPlaceholderText('e.g., {"action": "newTab", "index": 0}')
-        details_layout.addRow("Arguments (JSON):", self.actionArgsEdit)
+        self.actionArgsEdit.setMaximumHeight(80)
+        self.actionArgsEdit.setPlaceholderText('JSON arguments, e.g. {"action": "newTab", "index": 0}')
+        adv_layout.addRow("Arguments:", self.actionArgsEdit)
 
         self.iconPathEdit = QtWidgets.QLineEdit()
-        details_layout.addRow("Icon Path:", self.iconPathEdit)
+        self.iconPathEdit.setPlaceholderText("Path to icon (optional)")
+        adv_layout.addRow("Icon:", self.iconPathEdit)
 
-        right_layout.addWidget(details_group)
+        editor_layout.addRow(adv_group)
+        main_layout.addWidget(editor_group)
 
-        # Help section
-        help_group = QtWidgets.QGroupBox("Key Combination Help")
-        help_layout = QtWidgets.QVBoxLayout(help_group)
+        # Buttons row
+        btn_layout = QtWidgets.QHBoxLayout()
+        self.addActionButton = QtWidgets.QPushButton("Add New")
+        self.updateActionButton = QtWidgets.QPushButton("Save Changes")
+        self.updateActionButton.setStyleSheet("QPushButton { background-color: #89b4fa; color: #1e1e2e; } QPushButton:hover { background-color: #b4d0fb; }")
+        self.deleteActionButton = QtWidgets.QPushButton("Delete")
+        self.deleteActionButton.setStyleSheet("QPushButton { background-color: #f38ba8; color: #1e1e2e; } QPushButton:hover { background-color: #eba0ac; }")
+        self.moveActionUpButton = QtWidgets.QPushButton("Move Up")
+        self.moveActionDownButton = QtWidgets.QPushButton("Move Down")
+        self.clearFieldsButton = QtWidgets.QPushButton("Clear")
 
-        self.keyHelperLabel = QtWidgets.QLabel("""Key Combination Examples:
-• ctrl+shift+t (New Tab)
-• ctrl+shift+w (Close Tab)
-• alt+shift+plus (Split Pane Vertical)
-• ctrl+shift+f (Find)
-• ctrl+comma (Open Settings)
-• f11 (Toggle Fullscreen)
+        btn_layout.addWidget(self.addActionButton)
+        btn_layout.addWidget(self.updateActionButton)
+        btn_layout.addWidget(self.deleteActionButton)
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.moveActionUpButton)
+        btn_layout.addWidget(self.moveActionDownButton)
+        btn_layout.addWidget(self.clearFieldsButton)
+        main_layout.addLayout(btn_layout)
 
-Modifiers: ctrl, shift, alt, win
-Special keys: enter, tab, space, esc, backspace, delete,
-insert, home, end, pageup, pagedown, f1-f24
-Arrow keys: up, down, left, right
+        # Compact help
+        help_label = QtWidgets.QLabel(
+            "Modifiers: ctrl, shift, alt, win  |  Keys: enter, tab, space, esc, f1-f24, up/down/left/right  |  "
+            "Example: ctrl+shift+t")
+        help_label.setStyleSheet("QLabel { color: #6c7086; font-size: 11px; padding: 2px; }")
+        main_layout.addWidget(help_label)
 
-Action/Key Binding Structure:
-🔗 Bound: Action with key binding
-⚪ Unbound: Action without key binding
-❌ Disabled: Key binding with null ID
-
-Note: Actions and key bindings are separate!
-- Actions define what to do (stored in 'actions' array)
-- Key bindings link keys to action IDs (stored in 'keybindings' array)""")
-        self.keyHelperLabel.setWordWrap(True)
-        self.keyHelperLabel.setStyleSheet("QLabel { background-color: #313244; color: #bac2de; padding: 10px; border: 1px solid #45475a; border-radius: 4px; }")
-
-        help_layout.addWidget(self.keyHelperLabel)
-        right_layout.addWidget(help_group)
-
-        main_layout.addWidget(right_widget)
+        # Keep actionsListWidget as hidden proxy for compatibility with existing methods
+        self.actionsListWidget = QtWidgets.QListWidget()
+        self.actionsListWidget.setVisible(False)
 
         # Load actions
         self.loadActions()
 
-        # Connect action signals
-        self.actionsListWidget.currentItemChanged.connect(self.onActionSelectionChanged)
+        # Connect signals
+        self.actionsTable.currentCellChanged.connect(self.onActionTableSelectionChanged)
         self.addActionButton.clicked.connect(self.addAction)
         self.updateActionButton.clicked.connect(self.updateAction)
         self.deleteActionButton.clicked.connect(self.deleteAction)
@@ -1646,7 +1637,7 @@ Tips:
     # ========== Actions Tab Methods ==========
 
     def loadActions(self):
-        self.actionsListWidget.clear()
+        self.actionsTable.setRowCount(0)
         actions = data_schemes.get('actions', [])
         keybindings = data_schemes.get('keybindings', [])
 
@@ -1660,57 +1651,91 @@ Tips:
                     id_to_keys[action_id] = []
                 id_to_keys[action_id].append(keys)
             elif action_id is None and keys:
-                # Handle unbound keys (id: null)
                 if 'UNBOUND_KEYS' not in id_to_keys:
                     id_to_keys['UNBOUND_KEYS'] = []
                 id_to_keys['UNBOUND_KEYS'].append(keys)
 
+        grey = QtGui.QColor('#6c7086')
+
         # Display actions with their associated key bindings
         for i, action in enumerate(actions):
-            if isinstance(action, dict):
-                # Get action details
-                action_id = action.get('id', '')
-                name = action.get('name', '')
-                command = action.get('command', '')
+            if not isinstance(action, dict):
+                continue
+            action_id = action.get('id', '')
+            name = action.get('name', '')
+            command = action.get('command', '')
 
-                # Get command string for display
-                command_str = ''
-                if isinstance(command, dict):
-                    command_str = command.get('action', 'complex_command')
-                    if not command_str or command_str == 'complex_command':
-                        if command:
-                            command_str = list(command.keys())[0] if command else 'unknown'
-                elif isinstance(command, str):
-                    command_str = command
-                else:
-                    command_str = str(command) if command else 'unbound'
+            # Get command string for display
+            command_str = ''
+            if isinstance(command, dict):
+                command_str = command.get('action', '')
+                if not command_str:
+                    command_str = list(command.keys())[0] if command else 'unknown'
+            elif isinstance(command, str):
+                command_str = command
+            else:
+                command_str = str(command) if command else ''
 
-                # Get associated key bindings for this action ID
-                associated_keys = id_to_keys.get(action_id, [])
-                keys_display = ', '.join(associated_keys) if associated_keys else ''
+            # Get associated key bindings
+            associated_keys = id_to_keys.get(action_id, [])
+            keys_display = ', '.join(associated_keys) if associated_keys else ''
 
-                # Create display text
-                if keys_display:
-                    display_text = f"🔗 [{keys_display}] {name or action_id} → {command_str}"
-                else:
-                    display_text = f"⚪ [UNBOUND] {name or action_id} → {command_str}"
+            row = self.actionsTable.rowCount()
+            self.actionsTable.insertRow(row)
 
-                # Add ID info for reference
-                if action_id:
-                    display_text += f" (ID: {action_id})"
+            shortcut_item = QtWidgets.QTableWidgetItem(keys_display)
+            name_item = QtWidgets.QTableWidgetItem(name or action_id)
+            command_item = QtWidgets.QTableWidgetItem(command_str)
+            id_item = QtWidgets.QTableWidgetItem(action_id)
 
-                self.actionsListWidget.addItem(display_text)
+            # Store row type: 'action' and its index in data_schemes['actions']
+            shortcut_item.setData(QtCore.Qt.ItemDataRole.UserRole, ('action', i))
 
-        # Also show unbound key bindings (keys without valid action IDs)
+            if not keys_display:
+                for item in (shortcut_item, name_item, command_item, id_item):
+                    item.setForeground(grey)
+
+            self.actionsTable.setItem(row, 0, shortcut_item)
+            self.actionsTable.setItem(row, 1, name_item)
+            self.actionsTable.setItem(row, 2, command_item)
+            self.actionsTable.setItem(row, 3, id_item)
+
+        # Show unbound key bindings (keys with id: null)
         unbound_keys = id_to_keys.get('UNBOUND_KEYS', [])
-        for key in unbound_keys:
-            display_text = f"❌ [{key}] DISABLED/UNBOUND → null"
-            self.actionsListWidget.addItem(display_text)
+        for ui, key in enumerate(unbound_keys):
+            row = self.actionsTable.rowCount()
+            self.actionsTable.insertRow(row)
 
-    def onActionSelectionChanged(self):
-        current_row = self.actionsListWidget.currentRow()
-        actions = data_schemes.get('actions', [])
-        keybindings = data_schemes.get('keybindings', [])
+            shortcut_item = QtWidgets.QTableWidgetItem(key)
+            name_item = QtWidgets.QTableWidgetItem('DISABLED/UNBOUND')
+            command_item = QtWidgets.QTableWidgetItem('null')
+            id_item = QtWidgets.QTableWidgetItem('')
+
+            shortcut_item.setData(QtCore.Qt.ItemDataRole.UserRole, ('unbound', ui))
+
+            strike_font = QtGui.QFont()
+            strike_font.setStrikeOut(True)
+            for item in (shortcut_item, name_item, command_item, id_item):
+                item.setForeground(grey)
+                item.setFont(strike_font)
+
+            self.actionsTable.setItem(row, 0, shortcut_item)
+            self.actionsTable.setItem(row, 1, name_item)
+            self.actionsTable.setItem(row, 2, command_item)
+            self.actionsTable.setItem(row, 3, id_item)
+
+    def _getActionRowMeta(self, row: int):
+        """Return (row_type, data_index) tuple stored in the table row, or (None, -1)."""
+        if row < 0 or row >= self.actionsTable.rowCount():
+            return (None, -1)
+        item = self.actionsTable.item(row, 0)
+        if item is None:
+            return (None, -1)
+        data = item.data(QtCore.Qt.ItemDataRole.UserRole)
+        return data if data else (None, -1)
+
+    def onActionTableSelectionChanged(self, currentRow, currentCol, prevRow, prevCol):
+        row_type, data_idx = self._getActionRowMeta(currentRow)
 
         # Clear fields first
         self.actionNameEdit.clear()
@@ -1720,62 +1745,49 @@ Tips:
         self.iconPathEdit.clear()
         self.actionIdEdit.clear()
 
-        # Check if this is an unbound key entry (these appear after regular actions)
-        if current_row >= len(actions):
-            # This is an unbound key entry
-            unbound_index = current_row - len(actions)
-            unbound_keys = []
-            for binding in keybindings:
-                if binding.get('id') is None:
-                    unbound_keys.append(binding.get('keys', ''))
-
-            if unbound_index < len(unbound_keys):
-                self.keysEdit.setText(unbound_keys[unbound_index])
+        if row_type == 'unbound':
+            # Unbound key entry
+            keybindings = data_schemes.get('keybindings', [])
+            unbound_bindings = [b for b in keybindings if b.get('id') is None]
+            if data_idx < len(unbound_bindings):
+                self.keysEdit.setText(unbound_bindings[data_idx].get('keys', ''))
                 self.actionNameEdit.setText("DISABLED/UNBOUND")
                 self.commandActionCombo.setCurrentText("null")
             return
 
-        # Regular action entry
-        if current_row >= 0 and current_row < len(actions):
-            action = actions[current_row]
+        if row_type == 'action':
+            actions = data_schemes.get('actions', [])
+            keybindings = data_schemes.get('keybindings', [])
+            if data_idx < 0 or data_idx >= len(actions):
+                return
+            action = actions[data_idx]
 
-            # Get action details
             action_id = action.get('id', '')
             self.actionIdEdit.setText(action_id)
             self.actionNameEdit.setText(action.get('name', ''))
 
-            # Find associated key bindings for this action ID
+            # Find associated key bindings
             associated_keys = []
             for binding in keybindings:
                 if binding.get('id') == action_id:
                     key = binding.get('keys', '')
                     if key:
                         associated_keys.append(key)
-
-            # Display keys
             self.keysEdit.setText(', '.join(associated_keys))
 
             # Populate command and arguments
             command = action.get('command', '')
             if isinstance(command, dict):
-                # Complex command with arguments
                 command_action = command.get('action', '')
                 if command_action:
                     self.commandActionCombo.setCurrentText(command_action)
-                else:
-                    # If no 'action' key, use the first key as command
-                    if command:
-                        first_key = list(command.keys())[0]
-                        self.commandActionCombo.setCurrentText(first_key)
-
-                # Show full JSON in arguments field
+                elif command:
+                    self.commandActionCombo.setCurrentText(list(command.keys())[0])
                 self.actionArgsEdit.setPlainText(commentjson.dumps(command, indent=2))
             elif isinstance(command, str):
-                # Simple string command
                 self.commandActionCombo.setCurrentText(command)
                 self.actionArgsEdit.setPlainText('')
             else:
-                # Handle other types
                 self.commandActionCombo.setCurrentText(str(command) if command else '')
                 if command and not isinstance(command, str):
                     self.actionArgsEdit.setPlainText(commentjson.dumps(command, indent=2))
@@ -1783,33 +1795,45 @@ Tips:
             # Populate icon path
             self.iconPathEdit.setText(action.get('icon', ''))
 
+    def filterActions(self, text: str):
+        """Show/hide table rows based on filter text."""
+        text = text.lower()
+        for row in range(self.actionsTable.rowCount()):
+            match = False
+            if not text:
+                match = True
+            else:
+                for col in range(self.actionsTable.columnCount()):
+                    item = self.actionsTable.item(row, col)
+                    if item and text in item.text().lower():
+                        match = True
+                        break
+            self.actionsTable.setRowHidden(row, not match)
+
     def updateAction(self):
-        current_row = self.actionsListWidget.currentRow()
-        actions = data_schemes.get('actions', [])
+        current_row = self.actionsTable.currentRow()
+        row_type, data_idx = self._getActionRowMeta(current_row)
         keybindings = data_schemes.get('keybindings', [])
 
-        # Check if this is an unbound key entry
-        if current_row >= len(actions):
+        if row_type == 'unbound':
             # Handle unbound key modification
-            unbound_index = current_row - len(actions)
             unbound_bindings = [b for b in keybindings if b.get('id') is None]
-
-            if unbound_index < len(unbound_bindings):
-                binding = unbound_bindings[unbound_index]
+            if data_idx < len(unbound_bindings):
+                binding = unbound_bindings[data_idx]
                 new_keys = self.keysEdit.text().strip()
                 if new_keys:
                     binding['keys'] = new_keys
                 else:
-                    # Remove the binding if no keys
                     keybindings.remove(binding)
-
             self.loadActions()
             self.setUnsavedChanges()
             return
 
-        # Regular action update
-        if current_row >= 0 and current_row < len(actions):
-            action = actions[current_row]
+        if row_type == 'action':
+            actions = data_schemes.get('actions', [])
+            if data_idx < 0 or data_idx >= len(actions):
+                return
+            action = actions[data_idx]
             old_action_id = action.get('id', '')
 
             # Update action properties
@@ -1822,18 +1846,15 @@ Tips:
             args_text = self.actionArgsEdit.toPlainText().strip()
             if args_text:
                 try:
-                    # Try to parse as JSON for complex commands
                     args = commentjson.loads(args_text)
                     action['command'] = args
                 except:
-                    # If JSON parsing fails, use simple command
                     simple_command = self.commandActionCombo.currentText().strip()
                     if simple_command:
                         action['command'] = simple_command
                     else:
                         action['command'] = args_text
             else:
-                # Use simple command from combo box
                 simple_command = self.commandActionCombo.currentText().strip()
                 if simple_command:
                     action['command'] = simple_command
@@ -1855,17 +1876,12 @@ Tips:
             # Add new key bindings
             keys_text = self.keysEdit.text().strip()
             if keys_text and new_action_id:
-                # Split multiple keys
                 key_list = [key.strip() for key in keys_text.split(',') if key.strip()]
                 for key in key_list:
-                    new_binding = {
-                        'id': new_action_id,
-                        'keys': key
-                    }
-                    keybindings.append(new_binding)
+                    keybindings.append({'id': new_action_id, 'keys': key})
 
             self.loadActions()
-            self.actionsListWidget.setCurrentRow(current_row)
+            self.actionsTable.selectRow(current_row)
             self.setUnsavedChanges()
 
     def addAction(self):
@@ -1937,48 +1953,43 @@ Tips:
                 data_schemes['keybindings'].append(new_binding)
 
         self.loadActions()
-        # Select the newly added action
-        self.actionsListWidget.setCurrentRow(len(data_schemes['actions']) - 1)
+        # Select the newly added action (last action row before unbound keys)
+        actions_count = len(data_schemes.get('actions', []))
+        if actions_count > 0:
+            self.actionsTable.selectRow(actions_count - 1)
         self.setUnsavedChanges()
 
     def deleteAction(self):
-        current_row = self.actionsListWidget.currentRow()
-        actions = data_schemes.get('actions', [])
+        current_row = self.actionsTable.currentRow()
+        row_type, data_idx = self._getActionRowMeta(current_row)
         keybindings = data_schemes.get('keybindings', [])
 
-        # Check if this is an unbound key entry
-        if current_row >= len(actions):
-            # Handle deleting unbound key
-            unbound_index = current_row - len(actions)
+        if row_type == 'unbound':
             unbound_bindings = [b for b in keybindings if b.get('id') is None]
-
-            if unbound_index < len(unbound_bindings):
+            if data_idx < len(unbound_bindings):
                 reply = QtWidgets.QMessageBox.question(None, 'Delete Unbound Key',
                                                      'Are you sure you want to delete this unbound key binding?',
                                                      QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No)
                 if reply == QtWidgets.QMessageBox.StandardButton.Yes:
-                    binding_to_remove = unbound_bindings[unbound_index]
-                    keybindings.remove(binding_to_remove)
+                    keybindings.remove(unbound_bindings[data_idx])
                     self.loadActions()
                     self.setUnsavedChanges()
                     self.clearActionFields()
             return
 
-        # Regular action deletion
-        if current_row >= 0 and current_row < len(actions):
-            # Ask for confirmation
-            action = actions[current_row]
-            action_name = action.get('name', action.get('id', f'Action {current_row + 1}'))
+        if row_type == 'action':
+            actions = data_schemes.get('actions', [])
+            if data_idx < 0 or data_idx >= len(actions):
+                return
+            action = actions[data_idx]
+            action_name = action.get('name', action.get('id', f'Action {data_idx + 1}'))
             reply = QtWidgets.QMessageBox.question(None, 'Delete Action',
                                                  f'Are you sure you want to delete "{action_name}" and all its key bindings?',
                                                  QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No)
             if reply == QtWidgets.QMessageBox.StandardButton.Yes:
                 action_id = action.get('id')
+                del actions[data_idx]
 
-                # Remove the action
-                del actions[current_row]
-
-                # Remove associated key bindings
                 if action_id:
                     keybindings[:] = [b for b in keybindings if b.get('id') != action_id]
 
@@ -1986,29 +1997,32 @@ Tips:
                 self.setUnsavedChanges()
                 self.clearActionFields()
 
-                # Select next available item
-                if current_row < self.actionsListWidget.count():
-                    self.actionsListWidget.setCurrentRow(current_row)
-                elif self.actionsListWidget.count() > 0:
-                    self.actionsListWidget.setCurrentRow(self.actionsListWidget.count() - 1)
+                # Select next available row
+                if current_row < self.actionsTable.rowCount():
+                    self.actionsTable.selectRow(current_row)
+                elif self.actionsTable.rowCount() > 0:
+                    self.actionsTable.selectRow(self.actionsTable.rowCount() - 1)
 
     def moveActionUp(self):
-        current_row = self.actionsListWidget.currentRow()
-        if current_row > 0:
+        current_row = self.actionsTable.currentRow()
+        row_type, data_idx = self._getActionRowMeta(current_row)
+        if row_type == 'action' and data_idx > 0:
             actions = data_schemes.get('actions', [])
-            actions[current_row], actions[current_row - 1] = actions[current_row - 1], actions[current_row]
+            actions[data_idx], actions[data_idx - 1] = actions[data_idx - 1], actions[data_idx]
             self.loadActions()
-            self.actionsListWidget.setCurrentRow(current_row - 1)
+            self.actionsTable.selectRow(current_row - 1)
             self.setUnsavedChanges()
 
     def moveActionDown(self):
-        current_row = self.actionsListWidget.currentRow()
-        actions = data_schemes.get('actions', [])
-        if current_row >= 0 and current_row < len(actions) - 1:
-            actions[current_row], actions[current_row + 1] = actions[current_row + 1], actions[current_row]
-            self.loadActions()
-            self.actionsListWidget.setCurrentRow(current_row + 1)
-            self.setUnsavedChanges()
+        current_row = self.actionsTable.currentRow()
+        row_type, data_idx = self._getActionRowMeta(current_row)
+        if row_type == 'action':
+            actions = data_schemes.get('actions', [])
+            if data_idx >= 0 and data_idx < len(actions) - 1:
+                actions[data_idx], actions[data_idx + 1] = actions[data_idx + 1], actions[data_idx]
+                self.loadActions()
+                self.actionsTable.selectRow(current_row + 1)
+                self.setUnsavedChanges()
 
     def clearActionFields(self):
         """Helper method to clear all action input fields"""
