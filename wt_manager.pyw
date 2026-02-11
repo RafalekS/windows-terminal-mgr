@@ -149,6 +149,113 @@ class CommandStep:
         return " ".join(parts)
 
 
+class DragDropTreeWidget(QtWidgets.QTreeWidget):
+    """QTreeWidget subclass that supports drag-and-drop reordering for the folders tree."""
+
+    # Signal emitted after a successful drop with (moved_entry_dict)
+    itemDropped = QtCore.pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.InternalMove)
+        self.setDefaultDropAction(QtCore.Qt.DropAction.MoveAction)
+        self.setDropIndicatorShown(True)
+        self._ui = None  # Will be set to Ui_MainWindow instance
+
+    def _getEntry(self, item):
+        if item is None:
+            return None
+        return item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+
+    def startDrag(self, supportedActions):
+        """Prevent dragging remainingProfiles and virtual entries."""
+        item = self.currentItem()
+        entry = self._getEntry(item)
+        if entry and entry.get('type') in ('remainingProfiles', '_virtual_remaining'):
+            return  # Don't allow drag
+        super().startDrag(supportedActions)
+
+    def dropEvent(self, event):
+        """Handle drop: update data_schemes and reload tree."""
+        dragged_item = self.currentItem()
+        if not dragged_item:
+            event.ignore()
+            return
+
+        dragged_entry = self._getEntry(dragged_item)
+        if not dragged_entry or dragged_entry.get('type') in ('remainingProfiles', '_virtual_remaining'):
+            event.ignore()
+            return
+
+        # Determine drop target and position
+        drop_pos = self.dropIndicatorPosition()
+        target_item = self.itemAt(event.position().toPoint())
+        target_entry = self._getEntry(target_item) if target_item else None
+
+        # Don't drop onto remainingProfiles or virtual entries
+        if target_entry and target_entry.get('type') in ('remainingProfiles', '_virtual_remaining'):
+            event.ignore()
+            return
+
+        if not self._ui:
+            event.ignore()
+            return
+
+        # Find and remove dragged entry from its current location
+        parent_list, idx = self._ui.findParentList(dragged_entry)
+        if parent_list is None:
+            event.ignore()
+            return
+        parent_list.pop(idx)
+
+        # Determine destination
+        root_menu = data_schemes.get('newTabMenu', [])
+
+        if target_item is None:
+            # Dropped on empty space -> append to root
+            root_menu.append(dragged_entry)
+        elif drop_pos == QtWidgets.QAbstractItemView.DropIndicatorPosition.OnItem:
+            # Dropped ON an item
+            if target_entry and target_entry.get('type') == 'folder':
+                # Drop into folder
+                if 'entries' not in target_entry:
+                    target_entry['entries'] = []
+                target_entry['entries'].append(dragged_entry)
+            else:
+                # Drop on a non-folder -> insert after it
+                tgt_list, tgt_idx = self._ui.findParentList(target_entry)
+                if tgt_list is not None:
+                    tgt_list.insert(tgt_idx + 1, dragged_entry)
+                else:
+                    root_menu.append(dragged_entry)
+        elif drop_pos == QtWidgets.QAbstractItemView.DropIndicatorPosition.AboveItem:
+            tgt_list, tgt_idx = self._ui.findParentList(target_entry)
+            if tgt_list is not None:
+                tgt_list.insert(tgt_idx, dragged_entry)
+            else:
+                root_menu.append(dragged_entry)
+        elif drop_pos == QtWidgets.QAbstractItemView.DropIndicatorPosition.BelowItem:
+            tgt_list, tgt_idx = self._ui.findParentList(target_entry)
+            if tgt_list is not None:
+                tgt_list.insert(tgt_idx + 1, dragged_entry)
+            else:
+                root_menu.append(dragged_entry)
+        else:
+            # No indicator -> append to root
+            root_menu.append(dragged_entry)
+
+        # Don't let Qt handle the default move (we did it ourselves)
+        event.setDropAction(QtCore.Qt.DropAction.IgnoreAction)
+        event.accept()
+
+        # Reload tree and re-select
+        self._ui.loadFolders()
+        self._ui.reselectItemByIdentity(dragged_entry)
+        self._ui.setUnsavedChanges()
+
+
 class Ui_MainWindow(object):
     def __init__(self):
         self.unsaved_changes = False
@@ -894,7 +1001,8 @@ class Ui_MainWindow(object):
         folders_label.setFont(QtGui.QFont("", 10, QtGui.QFont.Weight.Bold))
         left_layout.addWidget(folders_label)
 
-        self.foldersTreeWidget = QtWidgets.QTreeWidget()
+        self.foldersTreeWidget = DragDropTreeWidget()
+        self.foldersTreeWidget._ui = self
         self.foldersTreeWidget.setHeaderLabels(["Item", "Type"])
         self.foldersTreeWidget.setMinimumHeight(400)
 
