@@ -48,10 +48,11 @@
 
 ### Phase 2: Visual & UI Improvements -- COMPLETED
 
-#### 2.1 Global stylesheet / theme -- COMPLETED
-- Applied comprehensive Catppuccin Mocha dark theme QSS stylesheet
-- Styled all widgets: tabs, buttons, inputs, combos, lists, trees, scrollbars, sliders, checkboxes, tooltips, group boxes
-- Consistent colour palette throughout
+#### 2.1 Global stylesheet / theme -- COMPLETED (REVISED)
+- Initially applied Catppuccin Mocha dark theme, then replaced with pastel light theme
+- Light lavender/purple palette with white inputs, visible dark text on all elements
+- Accent buttons: green Save, blue Save Changes, red Delete - all with white text
+- Styled all widgets: tabs, buttons, inputs, combos, lists, trees, tables, scrollbars, sliders, checkboxes, tooltips, group boxes
 
 #### 2.2 Status bar improvements -- COMPLETED
 - Updated status message colors for success/error feedback
@@ -70,8 +71,11 @@
 - Selection handler shows info for virtual entries
 - Prevents move/delete operations on virtual entries
 
-#### 3.2 Profile assignment indicator -- DEFERRED
-- Not implemented in this round; lower priority
+#### 3.2 Profile assignment indicator -- COMPLETED
+- Added `getProfileMenuLocation()` to find where each profile GUID appears in newTabMenu
+- Added `updateProfileMenuIndicators()` to set tooltips on profile list items
+- Tooltips show: "Menu: In folder: X" or "Menu: Root level" or "Menu: In: remainingProfiles (auto)" or "Menu: Not in menu"
+- Indicators refresh automatically when folder structure changes
 
 ---
 
@@ -98,8 +102,13 @@
 - Grey text for unbound actions, strikethrough for disabled/unbound keys
 - Compact help text at bottom with modifier/key reference
 
-#### 5.3 Key recorder widget -- DEFERRED
-- Not implemented; lower priority for this round
+#### 5.3 Key recorder widget -- COMPLETED
+- Added `KeyRecorderDialog` class that captures key press combinations
+- Maps Qt key codes to Windows Terminal shortcut names (a-z, 0-9, f1-f24, arrow keys, etc.)
+- Handles modifier keys: ctrl, shift, alt, win
+- "Record..." button next to Shortcut field opens the dialog
+- Warns if recorded shortcut conflicts with existing keybinding
+- Appends to existing shortcuts when field already has a value
 
 ---
 
@@ -129,8 +138,9 @@
 - Built-in Qt drop indicator line shown between items
 - Folder highlight when hovering over a folder (drop-into)
 
-#### 7.3 Command Builder drag and drop -- NOT IMPLEMENTED
-- Skipped; Move Up/Down buttons provide adequate reordering for the flat steps list
+#### 7.3 Command Builder drag and drop -- COMPLETED
+- Enabled InternalMove drag-drop on steps_list QListWidget
+- Drag to reorder command steps; preview auto-refreshes after drop
 
 ---
 
@@ -166,7 +176,7 @@ Helper methods added: `_pickColorInto()`, `_setProfileField()`
 | 6.1-6.2 | Simplify Command Builder | Large | **High** | DONE |
 | 7.1-7.2 | Drag and drop (Folders) | Medium | **Medium** | DONE |
 
-**Deferred items:** Key recorder (5.3), Profile assignment indicator (3.2), Command Builder drag-drop (7.3)
+**All items completed.** No deferred items remaining.
 
 ---
 

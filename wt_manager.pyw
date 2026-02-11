@@ -256,6 +256,104 @@ class DragDropTreeWidget(QtWidgets.QTreeWidget):
         self._ui.setUnsavedChanges()
 
 
+class KeyRecorderDialog(QtWidgets.QDialog):
+    """Dialog that captures a keyboard shortcut by listening for a key press."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Record Shortcut")
+        self.setFixedSize(320, 120)
+        self.recorded_keys = ""
+
+        layout = QtWidgets.QVBoxLayout(self)
+        self.label = QtWidgets.QLabel("Press the key combination you want to record...")
+        self.label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.label)
+
+        self.result_label = QtWidgets.QLabel("")
+        self.result_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.result_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        layout.addWidget(self.result_label)
+
+        btn_row = QtWidgets.QHBoxLayout()
+        self.ok_btn = QtWidgets.QPushButton("OK")
+        self.ok_btn.setEnabled(False)
+        self.ok_btn.clicked.connect(self.accept)
+        cancel_btn = QtWidgets.QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addStretch()
+        btn_row.addWidget(self.ok_btn)
+        btn_row.addWidget(cancel_btn)
+        layout.addLayout(btn_row)
+
+    def keyPressEvent(self, event):
+        key = event.key()
+        # Ignore bare modifier keys
+        if key in (QtCore.Qt.Key.Key_Control, QtCore.Qt.Key.Key_Shift,
+                   QtCore.Qt.Key.Key_Alt, QtCore.Qt.Key.Key_Meta):
+            return
+
+        modifiers = event.modifiers()
+        parts = []
+        if modifiers & QtCore.Qt.KeyboardModifier.ControlModifier:
+            parts.append("ctrl")
+        if modifiers & QtCore.Qt.KeyboardModifier.ShiftModifier:
+            parts.append("shift")
+        if modifiers & QtCore.Qt.KeyboardModifier.AltModifier:
+            parts.append("alt")
+        if modifiers & QtCore.Qt.KeyboardModifier.MetaModifier:
+            parts.append("win")
+
+        # Map Qt key to WT key name
+        key_name = self._qtKeyToWtName(key)
+        if key_name:
+            parts.append(key_name)
+            self.recorded_keys = "+".join(parts)
+            self.result_label.setText(self.recorded_keys)
+            self.ok_btn.setEnabled(True)
+
+    def _qtKeyToWtName(self, key) -> str:
+        """Map a Qt key code to a Windows Terminal shortcut key name."""
+        mapping = {
+            QtCore.Qt.Key.Key_A: 'a', QtCore.Qt.Key.Key_B: 'b', QtCore.Qt.Key.Key_C: 'c',
+            QtCore.Qt.Key.Key_D: 'd', QtCore.Qt.Key.Key_E: 'e', QtCore.Qt.Key.Key_F: 'f',
+            QtCore.Qt.Key.Key_G: 'g', QtCore.Qt.Key.Key_H: 'h', QtCore.Qt.Key.Key_I: 'i',
+            QtCore.Qt.Key.Key_J: 'j', QtCore.Qt.Key.Key_K: 'k', QtCore.Qt.Key.Key_L: 'l',
+            QtCore.Qt.Key.Key_M: 'm', QtCore.Qt.Key.Key_N: 'n', QtCore.Qt.Key.Key_O: 'o',
+            QtCore.Qt.Key.Key_P: 'p', QtCore.Qt.Key.Key_Q: 'q', QtCore.Qt.Key.Key_R: 'r',
+            QtCore.Qt.Key.Key_S: 's', QtCore.Qt.Key.Key_T: 't', QtCore.Qt.Key.Key_U: 'u',
+            QtCore.Qt.Key.Key_V: 'v', QtCore.Qt.Key.Key_W: 'w', QtCore.Qt.Key.Key_X: 'x',
+            QtCore.Qt.Key.Key_Y: 'y', QtCore.Qt.Key.Key_Z: 'z',
+            QtCore.Qt.Key.Key_0: '0', QtCore.Qt.Key.Key_1: '1', QtCore.Qt.Key.Key_2: '2',
+            QtCore.Qt.Key.Key_3: '3', QtCore.Qt.Key.Key_4: '4', QtCore.Qt.Key.Key_5: '5',
+            QtCore.Qt.Key.Key_6: '6', QtCore.Qt.Key.Key_7: '7', QtCore.Qt.Key.Key_8: '8',
+            QtCore.Qt.Key.Key_9: '9',
+            QtCore.Qt.Key.Key_F1: 'f1', QtCore.Qt.Key.Key_F2: 'f2', QtCore.Qt.Key.Key_F3: 'f3',
+            QtCore.Qt.Key.Key_F4: 'f4', QtCore.Qt.Key.Key_F5: 'f5', QtCore.Qt.Key.Key_F6: 'f6',
+            QtCore.Qt.Key.Key_F7: 'f7', QtCore.Qt.Key.Key_F8: 'f8', QtCore.Qt.Key.Key_F9: 'f9',
+            QtCore.Qt.Key.Key_F10: 'f10', QtCore.Qt.Key.Key_F11: 'f11', QtCore.Qt.Key.Key_F12: 'f12',
+            QtCore.Qt.Key.Key_F13: 'f13', QtCore.Qt.Key.Key_F14: 'f14', QtCore.Qt.Key.Key_F15: 'f15',
+            QtCore.Qt.Key.Key_F16: 'f16', QtCore.Qt.Key.Key_F17: 'f17', QtCore.Qt.Key.Key_F18: 'f18',
+            QtCore.Qt.Key.Key_F19: 'f19', QtCore.Qt.Key.Key_F20: 'f20', QtCore.Qt.Key.Key_F21: 'f21',
+            QtCore.Qt.Key.Key_F22: 'f22', QtCore.Qt.Key.Key_F23: 'f23', QtCore.Qt.Key.Key_F24: 'f24',
+            QtCore.Qt.Key.Key_Return: 'enter', QtCore.Qt.Key.Key_Enter: 'enter',
+            QtCore.Qt.Key.Key_Tab: 'tab', QtCore.Qt.Key.Key_Space: 'space',
+            QtCore.Qt.Key.Key_Escape: 'esc', QtCore.Qt.Key.Key_Backspace: 'backspace',
+            QtCore.Qt.Key.Key_Delete: 'delete', QtCore.Qt.Key.Key_Insert: 'insert',
+            QtCore.Qt.Key.Key_Home: 'home', QtCore.Qt.Key.Key_End: 'end',
+            QtCore.Qt.Key.Key_PageUp: 'pgup', QtCore.Qt.Key.Key_PageDown: 'pgdn',
+            QtCore.Qt.Key.Key_Up: 'up', QtCore.Qt.Key.Key_Down: 'down',
+            QtCore.Qt.Key.Key_Left: 'left', QtCore.Qt.Key.Key_Right: 'right',
+            QtCore.Qt.Key.Key_Plus: 'plus', QtCore.Qt.Key.Key_Minus: 'minus',
+            QtCore.Qt.Key.Key_Equal: '=', QtCore.Qt.Key.Key_Comma: ',',
+            QtCore.Qt.Key.Key_Period: '.', QtCore.Qt.Key.Key_Slash: '/',
+            QtCore.Qt.Key.Key_Backslash: '\\', QtCore.Qt.Key.Key_BracketLeft: '[',
+            QtCore.Qt.Key.Key_BracketRight: ']', QtCore.Qt.Key.Key_Semicolon: ';',
+            QtCore.Qt.Key.Key_Apostrophe: "'", QtCore.Qt.Key.Key_QuoteLeft: '`',
+        }
+        return mapping.get(key, '')
+
+
 class Ui_MainWindow(object):
     def __init__(self):
         self.unsaved_changes = False
@@ -313,7 +411,7 @@ class Ui_MainWindow(object):
         self.saveButton = QtWidgets.QPushButton("Save")
         self.saveButton.setMinimumSize(120, 40)
         self.saveButton.setMaximumSize(120, 40)
-        self.saveButton.setStyleSheet("QPushButton { background-color: #a6e3a1; color: #1e1e2e; font-weight: bold; } QPushButton:hover { background-color: #94e2d5; }")
+        self.saveButton.setStyleSheet("QPushButton { background-color: #6dba65; color: #ffffff; font-weight: bold; } QPushButton:hover { background-color: #5aa852; }")
         bottom_layout.addWidget(self.saveButton)
 
         main_layout.addLayout(bottom_layout)
@@ -345,6 +443,7 @@ class Ui_MainWindow(object):
         self.listWidget.setMinimumHeight(400)
         for item in profiles_list:
             self.listWidget.addItem(item)
+        self.updateProfileMenuIndicators()
         left_layout.addWidget(self.listWidget)
 
         # Profile control buttons
@@ -699,9 +798,16 @@ class Ui_MainWindow(object):
         self.actionNameEdit.setPlaceholderText("Display name for the action")
         editor_layout.addRow("Name:", self.actionNameEdit)
 
+        shortcut_row = QtWidgets.QHBoxLayout()
         self.keysEdit = QtWidgets.QLineEdit()
         self.keysEdit.setPlaceholderText("e.g. ctrl+shift+t  (comma-separate for multiple)")
-        editor_layout.addRow("Shortcut:", self.keysEdit)
+        self.recordKeyButton = QtWidgets.QPushButton("Record...")
+        self.recordKeyButton.setFixedWidth(70)
+        self.recordKeyButton.setToolTip("Click to record a key combination")
+        self.recordKeyButton.clicked.connect(self.recordShortcut)
+        shortcut_row.addWidget(self.keysEdit)
+        shortcut_row.addWidget(self.recordKeyButton)
+        editor_layout.addRow("Shortcut:", shortcut_row)
 
         self.commandActionCombo = QtWidgets.QComboBox()
         self.commandActionCombo.setEditable(True)
@@ -736,9 +842,9 @@ class Ui_MainWindow(object):
         btn_layout = QtWidgets.QHBoxLayout()
         self.addActionButton = QtWidgets.QPushButton("Add New")
         self.updateActionButton = QtWidgets.QPushButton("Save Changes")
-        self.updateActionButton.setStyleSheet("QPushButton { background-color: #89b4fa; color: #1e1e2e; } QPushButton:hover { background-color: #b4d0fb; }")
+        self.updateActionButton.setStyleSheet("QPushButton { background-color: #5b8bd4; color: #ffffff; } QPushButton:hover { background-color: #4a7ac3; }")
         self.deleteActionButton = QtWidgets.QPushButton("Delete")
-        self.deleteActionButton.setStyleSheet("QPushButton { background-color: #f38ba8; color: #1e1e2e; } QPushButton:hover { background-color: #eba0ac; }")
+        self.deleteActionButton.setStyleSheet("QPushButton { background-color: #d45b5b; color: #ffffff; } QPushButton:hover { background-color: #c34a4a; }")
         self.moveActionUpButton = QtWidgets.QPushButton("Move Up")
         self.moveActionDownButton = QtWidgets.QPushButton("Move Down")
         self.clearFieldsButton = QtWidgets.QPushButton("Clear")
@@ -756,7 +862,7 @@ class Ui_MainWindow(object):
         help_label = QtWidgets.QLabel(
             "Modifiers: ctrl, shift, alt, win  |  Keys: enter, tab, space, esc, f1-f24, up/down/left/right  |  "
             "Example: ctrl+shift+t")
-        help_label.setStyleSheet("QLabel { color: #6c7086; font-size: 11px; padding: 2px; }")
+        help_label.setStyleSheet("QLabel { color: #8580a0; font-size: 11px; padding: 2px; }")
         main_layout.addWidget(help_label)
 
         # Keep actionsListWidget as hidden proxy for compatibility with existing methods
@@ -856,7 +962,7 @@ class Ui_MainWindow(object):
         add_pane_h_btn = QtWidgets.QPushButton("+ Split -H")
         add_pane_v_btn = QtWidgets.QPushButton("+ Split -V")
         remove_btn = QtWidgets.QPushButton("Remove")
-        remove_btn.setStyleSheet("QPushButton { background-color: #f38ba8; color: #1e1e2e; } QPushButton:hover { background-color: #eba0ac; }")
+        remove_btn.setStyleSheet("QPushButton { background-color: #d45b5b; color: #ffffff; } QPushButton:hover { background-color: #c34a4a; }")
         move_up_btn = QtWidgets.QPushButton("Up")
         move_down_btn = QtWidgets.QPushButton("Down")
         btn_row.addWidget(add_tab_btn)
@@ -873,6 +979,9 @@ class Ui_MainWindow(object):
 
         self.steps_list = QtWidgets.QListWidget()
         self.steps_list.setMaximumWidth(350)
+        self.steps_list.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.InternalMove)
+        self.steps_list.setDefaultDropAction(QtCore.Qt.DropAction.MoveAction)
+        self.steps_list.model().rowsMoved.connect(lambda: self.refresh_preview())
         step_split.addWidget(self.steps_list, 1)
 
         # Step editor - form layout (auto-apply, no Apply button)
@@ -1050,7 +1159,7 @@ class Ui_MainWindow(object):
         delete_layout = QtWidgets.QHBoxLayout()
         delete_layout.addStretch()
         self.deleteFolderButton = QtWidgets.QPushButton("Delete Item")
-        self.deleteFolderButton.setStyleSheet("QPushButton { background-color: #f38ba8; color: #1e1e2e; } QPushButton:hover { background-color: #eba0ac; }")
+        self.deleteFolderButton.setStyleSheet("QPushButton { background-color: #d45b5b; color: #ffffff; } QPushButton:hover { background-color: #c34a4a; }")
         delete_layout.addWidget(self.deleteFolderButton)
         delete_layout.addStretch()
         folder_buttons_layout.addLayout(delete_layout)
@@ -1137,7 +1246,7 @@ Tips:
 • Folders can contain profiles, separators, or other folders
 • Use separators to group related profiles visually""")
         help_label.setWordWrap(True)
-        help_label.setStyleSheet("QLabel { background-color: #313244; color: #bac2de; padding: 10px; border: 1px solid #45475a; border-radius: 4px; }")
+        help_label.setStyleSheet("QLabel { background-color: #ede8f5; color: #5c5470; padding: 10px; border: 1px solid #c8bfe0; border-radius: 4px; }")
 
         help_layout.addWidget(help_label)
         right_layout.addWidget(help_group)
@@ -1775,7 +1884,7 @@ Tips:
                     id_to_keys['UNBOUND_KEYS'] = []
                 id_to_keys['UNBOUND_KEYS'].append(keys)
 
-        grey = QtGui.QColor('#6c7086')
+        grey = QtGui.QColor('#9590a8')
 
         # Display actions with their associated key bindings
         for i, action in enumerate(actions):
@@ -2152,6 +2261,31 @@ Tips:
         self.keysEdit.clear()
         self.actionArgsEdit.clear()
         self.iconPathEdit.clear()
+
+    def recordShortcut(self):
+        """Open key recorder dialog and populate the shortcut field."""
+        dialog = KeyRecorderDialog()
+        if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted and dialog.recorded_keys:
+            recorded = dialog.recorded_keys
+            # Check for conflicts with existing bindings
+            keybindings = data_schemes.get('keybindings', [])
+            conflicts = []
+            for binding in keybindings:
+                if binding.get('keys', '').lower() == recorded.lower():
+                    action_id = binding.get('id', 'unknown')
+                    conflicts.append(action_id)
+            if conflicts:
+                reply = QtWidgets.QMessageBox.warning(None, "Shortcut Conflict",
+                    f"'{recorded}' is already bound to: {', '.join(conflicts)}\n\nUse it anyway?",
+                    QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No)
+                if reply != QtWidgets.QMessageBox.StandardButton.Yes:
+                    return
+            # Append to existing keys or set new
+            existing = self.keysEdit.text().strip()
+            if existing:
+                self.keysEdit.setText(f"{existing}, {recorded}")
+            else:
+                self.keysEdit.setText(recorded)
 
     # ========== Command Builder Tab Methods ==========
 
@@ -2568,6 +2702,10 @@ Tips:
 
         debug_print(f"DEBUG loadFolders: Tree now has {self.foldersTreeWidget.topLevelItemCount()} top-level items")
 
+        # Refresh profile menu indicators when folders change
+        if self.ui_initialized:
+            self.updateProfileMenuIndicators()
+
     def addTreeItem(self, entry: dict, parent):
         """Recursively add tree items for folders and profiles"""
         entry_type = entry.get('type', 'unknown')
@@ -2604,7 +2742,7 @@ Tips:
             item = QtWidgets.QTreeWidgetItem(parent,
                 [f"Remaining Profiles ({count} auto-listed)", "📋 Auto"])
             item.setData(0, QtCore.Qt.ItemDataRole.UserRole, entry)
-            item.setForeground(0, QtGui.QBrush(QtGui.QColor("#a6adc8")))
+            item.setForeground(0, QtGui.QBrush(QtGui.QColor("#8580a0")))
             item.setToolTip(0, "Profiles not explicitly in the menu. WT shows these automatically.")
 
             for profile in unassigned:
@@ -2614,7 +2752,7 @@ Tips:
                 # Store a marker so we know this is a virtual/auto entry
                 child_item.setData(0, QtCore.Qt.ItemDataRole.UserRole,
                     {'type': '_virtual_remaining', 'profile': guid})
-                child_item.setForeground(0, QtGui.QBrush(QtGui.QColor("#89b4fa")))
+                child_item.setForeground(0, QtGui.QBrush(QtGui.QColor("#5b8bd4")))
                 child_item.setToolTip(0, f"GUID: {guid}\nRight-click or use 'Move Profile' to assign explicitly")
 
             # Auto-expand to show what's inside
@@ -2642,6 +2780,39 @@ Tips:
         new_tab_menu = data_schemes.get('newTabMenu', [])
         walk_entries(new_tab_menu)
         return assigned
+
+    def getProfileMenuLocation(self, guid: str) -> str:
+        """Find where a profile GUID appears in the newTabMenu structure.
+        Returns a descriptive string like 'In folder: SSH Tools' or 'Root level' or 'remainingProfiles'."""
+        def search(entries, parent_name=None):
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                if entry.get('type') == 'profile' and entry.get('profile') == guid:
+                    return f"In folder: {parent_name}" if parent_name else "Root level"
+                if entry.get('type') == 'folder':
+                    result = search(entry.get('entries', []), entry.get('name', 'Unnamed'))
+                    if result:
+                        return result
+                if entry.get('type') == 'remainingProfiles':
+                    # Check if this profile would be auto-listed
+                    assigned = self.getAssignedProfileGuids()
+                    if guid not in assigned:
+                        return "In: remainingProfiles (auto)"
+            return None
+
+        result = search(data_schemes.get('newTabMenu', []))
+        return result if result else "Not in menu"
+
+    def updateProfileMenuIndicators(self):
+        """Update tooltips on profile list items showing their menu location."""
+        profiles = data_schemes.get('profiles', {}).get('list', [])
+        for i in range(self.listWidget.count()):
+            item = self.listWidget.item(i)
+            if i < len(profiles):
+                guid = profiles[i].get('guid', '')
+                location = self.getProfileMenuLocation(guid)
+                item.setToolTip(f"Menu: {location}\nGUID: {guid}")
 
     def getProfileNameByGuid(self, guid: str) -> str:
         """Get profile name from GUID"""
@@ -3325,11 +3496,11 @@ Tips:
         if dumpJson():
             self.unsaved_changes = False
             self.statusLabel.setText("Settings saved successfully!")
-            self.statusLabel.setStyleSheet("QLabel { color: #a6e3a1; }")
+            self.statusLabel.setStyleSheet("QLabel { color: #2e8b2e; font-weight: bold; }")
             QtCore.QTimer.singleShot(3000, lambda: self.statusLabel.setText(""))
         else:
             self.statusLabel.setText("Error saving settings!")
-            self.statusLabel.setStyleSheet("QLabel { color: #f38ba8; }")
+            self.statusLabel.setStyleSheet("QLabel { color: #c34a4a; font-weight: bold; }")
 
 
 if __name__ == "__main__":
@@ -3337,91 +3508,98 @@ if __name__ == "__main__":
     MainWindow = QtWidgets.QMainWindow()
     app.setStyle('Fusion')
 
-    # Global stylesheet for consistent look
+    # Global stylesheet - pastel light theme
     app.setStyleSheet("""
-        QMainWindow { background-color: #1e1e2e; }
-        QWidget { background-color: #1e1e2e; color: #cdd6f4; }
-        QTabWidget::pane { border: 1px solid #45475a; background: #1e1e2e; }
+        QMainWindow { background-color: #f5f0ff; }
+        QWidget { background-color: #f5f0ff; color: #2d2d3d; }
+        QTabWidget::pane { border: 1px solid #c8bfe0; background: #f5f0ff; }
         QTabBar::tab {
-            background: #313244; color: #bac2de; border: 1px solid #45475a;
+            background: #e8e0f5; color: #3d3555; border: 1px solid #c8bfe0;
             padding: 8px 16px; margin-right: 2px; border-top-left-radius: 4px;
             border-top-right-radius: 4px;
         }
-        QTabBar::tab:selected { background: #45475a; color: #cdd6f4; border-bottom-color: #45475a; }
-        QTabBar::tab:hover { background: #585b70; }
+        QTabBar::tab:selected { background: #f5f0ff; color: #2d2d3d; border-bottom-color: #f5f0ff; font-weight: bold; }
+        QTabBar::tab:hover { background: #ded5f0; }
         QGroupBox {
-            font-weight: bold; border: 1px solid #45475a; border-radius: 6px;
-            margin-top: 10px; padding-top: 14px; color: #cdd6f4;
+            font-weight: bold; border: 1px solid #c8bfe0; border-radius: 6px;
+            margin-top: 10px; padding-top: 14px; color: #2d2d3d;
         }
         QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 6px; }
         QGroupBox::indicator { width: 13px; height: 13px; }
-        QGroupBox::indicator:checked { image: none; border: 2px solid #89b4fa; border-radius: 3px; background: #89b4fa; }
-        QGroupBox::indicator:unchecked { image: none; border: 2px solid #585b70; border-radius: 3px; background: #313244; }
+        QGroupBox::indicator:checked { image: none; border: 2px solid #7c6bc4; border-radius: 3px; background: #7c6bc4; }
+        QGroupBox::indicator:unchecked { image: none; border: 2px solid #b0a8c8; border-radius: 3px; background: #e8e0f5; }
         QLineEdit, QTextEdit, QPlainTextEdit {
-            background-color: #313244; border: 1px solid #45475a; border-radius: 4px;
-            padding: 4px 6px; color: #cdd6f4; selection-background-color: #585b70;
+            background-color: #ffffff; border: 1px solid #c8bfe0; border-radius: 4px;
+            padding: 4px 6px; color: #2d2d3d; selection-background-color: #d4cceb;
         }
-        QLineEdit:focus, QTextEdit:focus { border-color: #89b4fa; }
-        QLineEdit:read-only { background-color: #181825; color: #a6adc8; }
+        QLineEdit:focus, QTextEdit:focus { border-color: #7c6bc4; }
+        QLineEdit:read-only { background-color: #ede8f5; color: #6b6580; }
         QComboBox {
-            background-color: #313244; border: 1px solid #45475a; border-radius: 4px;
-            padding: 4px 8px; color: #cdd6f4;
+            background-color: #ffffff; border: 1px solid #c8bfe0; border-radius: 4px;
+            padding: 4px 8px; color: #2d2d3d;
         }
         QComboBox::drop-down { border: none; width: 20px; }
         QComboBox::down-arrow { image: none; border-left: 4px solid transparent;
-            border-right: 4px solid transparent; border-top: 6px solid #cdd6f4; }
+            border-right: 4px solid transparent; border-top: 6px solid #5c5470; }
         QComboBox QAbstractItemView {
-            background-color: #313244; border: 1px solid #45475a; color: #cdd6f4;
-            selection-background-color: #45475a;
+            background-color: #ffffff; border: 1px solid #c8bfe0; color: #2d2d3d;
+            selection-background-color: #d4cceb;
         }
         QSpinBox, QDoubleSpinBox {
-            background-color: #313244; border: 1px solid #45475a; border-radius: 4px;
-            padding: 4px; color: #cdd6f4;
+            background-color: #ffffff; border: 1px solid #c8bfe0; border-radius: 4px;
+            padding: 4px; color: #2d2d3d;
         }
         QPushButton {
-            background-color: #45475a; color: #cdd6f4; border: 1px solid #585b70;
+            background-color: #e0d8f0; color: #2d2d3d; border: 1px solid #b0a8c8;
             border-radius: 4px; padding: 6px 14px; font-weight: bold;
         }
-        QPushButton:hover { background-color: #585b70; }
-        QPushButton:pressed { background-color: #313244; }
+        QPushButton:hover { background-color: #d0c5e8; }
+        QPushButton:pressed { background-color: #c0b5d8; }
+        QPushButton:disabled { background-color: #ede8f5; color: #a09ab0; border-color: #d5d0e0; }
         QListWidget, QTreeWidget {
-            background-color: #313244; border: 1px solid #45475a; border-radius: 4px;
-            color: #cdd6f4; alternate-background-color: #2a2a3d;
+            background-color: #ffffff; border: 1px solid #c8bfe0; border-radius: 4px;
+            color: #2d2d3d; alternate-background-color: #f5f0ff;
         }
-        QListWidget::item:selected, QTreeWidget::item:selected { background-color: #45475a; }
-        QListWidget::item:hover, QTreeWidget::item:hover { background-color: #3a3a4d; }
+        QListWidget::item:selected, QTreeWidget::item:selected { background-color: #d4cceb; }
+        QListWidget::item:hover, QTreeWidget::item:hover { background-color: #ede8f5; }
+        QTableWidget {
+            background-color: #ffffff; border: 1px solid #c8bfe0; border-radius: 4px;
+            color: #2d2d3d; alternate-background-color: #f5f0ff; gridline-color: #d5d0e0;
+        }
+        QTableWidget::item:selected { background-color: #d4cceb; }
+        QTableWidget::item:hover { background-color: #ede8f5; }
         QHeaderView::section {
-            background-color: #313244; color: #bac2de; border: 1px solid #45475a;
-            padding: 4px;
+            background-color: #e8e0f5; color: #3d3555; border: 1px solid #c8bfe0;
+            padding: 4px; font-weight: bold;
         }
         QScrollBar:vertical {
-            background: #1e1e2e; width: 12px; border: none;
+            background: #f0eaf8; width: 12px; border: none;
         }
-        QScrollBar::handle:vertical { background: #45475a; border-radius: 6px; min-height: 20px; }
-        QScrollBar::handle:vertical:hover { background: #585b70; }
+        QScrollBar::handle:vertical { background: #c8bfe0; border-radius: 6px; min-height: 20px; }
+        QScrollBar::handle:vertical:hover { background: #b0a8c8; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
         QScrollBar:horizontal {
-            background: #1e1e2e; height: 12px; border: none;
+            background: #f0eaf8; height: 12px; border: none;
         }
-        QScrollBar::handle:horizontal { background: #45475a; border-radius: 6px; min-width: 20px; }
-        QScrollBar::handle:horizontal:hover { background: #585b70; }
+        QScrollBar::handle:horizontal { background: #c8bfe0; border-radius: 6px; min-width: 20px; }
+        QScrollBar::handle:horizontal:hover { background: #b0a8c8; }
         QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }
         QSlider::groove:horizontal {
-            height: 6px; background: #313244; border-radius: 3px;
+            height: 6px; background: #d5d0e0; border-radius: 3px;
         }
         QSlider::handle:horizontal {
             width: 16px; height: 16px; margin: -5px 0;
-            background: #89b4fa; border-radius: 8px;
+            background: #7c6bc4; border-radius: 8px;
         }
-        QSlider::handle:horizontal:hover { background: #b4d0fb; }
+        QSlider::handle:horizontal:hover { background: #9585d0; }
         QCheckBox { spacing: 6px; }
-        QCheckBox::indicator { width: 16px; height: 16px; border-radius: 3px; border: 2px solid #585b70; }
-        QCheckBox::indicator:checked { background: #89b4fa; border-color: #89b4fa; }
-        QCheckBox::indicator:unchecked { background: #313244; }
-        QLabel { color: #bac2de; }
+        QCheckBox::indicator { width: 16px; height: 16px; border-radius: 3px; border: 2px solid #b0a8c8; }
+        QCheckBox::indicator:checked { background: #7c6bc4; border-color: #7c6bc4; }
+        QCheckBox::indicator:unchecked { background: #ffffff; }
+        QLabel { color: #3d3555; }
         QScrollArea { border: none; }
-        QFrame[frameShape="4"] { color: #45475a; }
-        QToolTip { background-color: #313244; color: #cdd6f4; border: 1px solid #45475a; padding: 4px; }
+        QFrame[frameShape="4"] { color: #c8bfe0; }
+        QToolTip { background-color: #ffffff; color: #2d2d3d; border: 1px solid #c8bfe0; padding: 4px; }
     """)
 
     # Try to load the icon using absolute path from script directory
