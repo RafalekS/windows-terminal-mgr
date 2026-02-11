@@ -116,6 +116,7 @@ class CommandStep:
         self.kind = kind  # "new-tab" or "split-pane"
         self.profile_name: str = ""
         self.starting_directory: str = ""
+        self.use_parent_dir: bool = False
         self.title: str = ""
         self.tab_color: str = ""
         self.color_scheme: str = ""
@@ -136,7 +137,9 @@ class CommandStep:
                 parts.append(f"--size {self.pane_size}")
         if self.profile_name and not self.commandline:
             parts.append(f'-p "{self.profile_name}"')
-        if self.starting_directory:
+        if self.use_parent_dir:
+            parts.append("--useParentProcessDirectory")
+        elif self.starting_directory:
             parts.append(f'-d "{self.starting_directory}"')
         if self.title:
             parts.append(f'--title "{self.title}"')
@@ -893,19 +896,22 @@ class Ui_MainWindow(object):
         self.scheme_names = sorted(set(user_schemes + BUILTIN_SCHEMES))
 
         # Global window options - collapsible, collapsed by default
-        global_box = QtWidgets.QGroupBox("Global Window Options")
+        global_box = QtWidgets.QGroupBox("Global Window Options  (expand to set --maximized, --size, --pos, --window)")
         global_box.setCheckable(True)
         global_box.setChecked(False)
         g_layout = QtWidgets.QHBoxLayout()
         g_layout.setSpacing(8)
 
-        # State checkboxes (most common)
+        # State checkboxes
         state_w = QtWidgets.QWidget()
         st_layout = QtWidgets.QVBoxLayout(state_w)
         st_layout.setContentsMargins(0, 0, 0, 0)
-        self.global_maximized = QtWidgets.QCheckBox("Maximized")
-        self.global_fullscreen = QtWidgets.QCheckBox("Fullscreen")
-        self.global_focus = QtWidgets.QCheckBox("Focus mode")
+        self.global_maximized = QtWidgets.QCheckBox("--maximized")
+        self.global_fullscreen = QtWidgets.QCheckBox("--fullscreen")
+        self.global_focus = QtWidgets.QCheckBox("--focus")
+        self.global_maximized.setToolTip("Start window maximized")
+        self.global_fullscreen.setToolTip("Start window in fullscreen")
+        self.global_focus.setToolTip("Start window in focus mode (hides tabs)")
         self.global_maximized.stateChanged.connect(lambda state: self.global_fullscreen.setChecked(False) if state else None)
         self.global_fullscreen.stateChanged.connect(lambda state: self.global_maximized.setChecked(False) if state else None)
         st_layout.addWidget(self.global_maximized)
@@ -920,9 +926,10 @@ class Ui_MainWindow(object):
         self.window_combo.setEditable(True)
         self.window_combo.addItems(["", "new", "last"])
         self.window_combo.setEditText("")
-        win_l.addRow("Window:", self.window_combo)
+        self.window_combo.setToolTip("--window: 'new' = new window, 'last' = most recent, or window ID")
+        win_l.addRow("--window:", self.window_combo)
 
-        # Size & position (compact)
+        # Size & position
         dims_w = QtWidgets.QWidget()
         dims_l = QtWidgets.QFormLayout(dims_w)
         dims_l.setContentsMargins(0, 0, 0, 0)
@@ -930,10 +937,14 @@ class Ui_MainWindow(object):
         self.global_size_rows = QtWidgets.QSpinBox()
         self.global_size_cols.setRange(0, 1000)
         self.global_size_rows.setRange(0, 1000)
+        self.global_size_cols.setToolTip("Number of character columns")
+        self.global_size_rows.setToolTip("Number of character rows")
         self.global_pos_x = QtWidgets.QSpinBox()
         self.global_pos_y = QtWidgets.QSpinBox()
         self.global_pos_x.setRange(0, 10000)
         self.global_pos_y.setRange(0, 10000)
+        self.global_pos_x.setToolTip("Window X position in pixels")
+        self.global_pos_y.setToolTip("Window Y position in pixels")
         size_row = QtWidgets.QHBoxLayout()
         size_row.addWidget(self.global_size_cols)
         size_row.addWidget(QtWidgets.QLabel("x"))
@@ -942,8 +953,8 @@ class Ui_MainWindow(object):
         pos_row.addWidget(self.global_pos_x)
         pos_row.addWidget(QtWidgets.QLabel(","))
         pos_row.addWidget(self.global_pos_y)
-        dims_l.addRow("Size (c,r):", size_row)
-        dims_l.addRow("Pos (x,y):", pos_row)
+        dims_l.addRow("--size (cols x rows):", size_row)
+        dims_l.addRow("--pos (x, y pixels):", pos_row)
 
         g_layout.addWidget(state_w)
         g_layout.addWidget(win_w)
@@ -951,20 +962,26 @@ class Ui_MainWindow(object):
         global_box.setLayout(g_layout)
         root.addWidget(global_box)
 
-        # Steps list and editor in a splitter
-        steps_box = QtWidgets.QGroupBox("Command Steps")
+        # Command Steps - main area
+        steps_box = QtWidgets.QGroupBox("Command Steps  (each step = a new tab or split pane)")
         sb_layout = QtWidgets.QVBoxLayout()
         sb_layout.setSpacing(6)
 
-        # Add buttons row
+        # Add/remove buttons
         btn_row = QtWidgets.QHBoxLayout()
         add_tab_btn = QtWidgets.QPushButton("+ New Tab")
-        add_pane_h_btn = QtWidgets.QPushButton("+ Split -H")
-        add_pane_v_btn = QtWidgets.QPushButton("+ Split -V")
-        remove_btn = QtWidgets.QPushButton("Remove")
+        add_tab_btn.setToolTip("Add a new-tab step")
+        add_pane_h_btn = QtWidgets.QPushButton("+ Split Horizontal")
+        add_pane_h_btn.setToolTip("Add a split-pane -H step (split top/bottom)")
+        add_pane_v_btn = QtWidgets.QPushButton("+ Split Vertical")
+        add_pane_v_btn.setToolTip("Add a split-pane -V step (split left/right)")
+        remove_btn = QtWidgets.QPushButton("Remove Step")
+        remove_btn.setToolTip("Remove the selected step")
         remove_btn.setStyleSheet("QPushButton { background-color: #d45b5b; color: #ffffff; } QPushButton:hover { background-color: #c34a4a; }")
         move_up_btn = QtWidgets.QPushButton("Up")
+        move_up_btn.setToolTip("Move selected step up in order")
         move_down_btn = QtWidgets.QPushButton("Down")
+        move_down_btn.setToolTip("Move selected step down in order")
         btn_row.addWidget(add_tab_btn)
         btn_row.addWidget(add_pane_h_btn)
         btn_row.addWidget(add_pane_v_btn)
@@ -974,17 +991,16 @@ class Ui_MainWindow(object):
         btn_row.addWidget(remove_btn)
         sb_layout.addLayout(btn_row)
 
-        # Steps list + editor side by side
-        step_split = QtWidgets.QHBoxLayout()
+        # Steps list + editor side by side — use QSplitter for resizable
+        step_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
 
         self.steps_list = QtWidgets.QListWidget()
-        self.steps_list.setMaximumWidth(350)
         self.steps_list.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.InternalMove)
         self.steps_list.setDefaultDropAction(QtCore.Qt.DropAction.MoveAction)
         self.steps_list.model().rowsMoved.connect(lambda: self.refresh_preview())
-        step_split.addWidget(self.steps_list, 1)
+        step_splitter.addWidget(self.steps_list)
 
-        # Step editor - form layout (auto-apply, no Apply button)
+        # Step editor
         editor_box = QtWidgets.QGroupBox("Edit Selected Step")
         ed_layout = QtWidgets.QFormLayout(editor_box)
         ed_layout.setSpacing(6)
@@ -992,57 +1008,77 @@ class Ui_MainWindow(object):
         self.profile_combo = QtWidgets.QComboBox()
         self.profile_combo.setEditable(True)
         self.profile_combo.addItems([""] + self.profile_names)
-        ed_layout.addRow("Profile:", self.profile_combo)
+        self.profile_combo.setToolTip("-p: Which profile to use for this tab/pane")
+        ed_layout.addRow("Profile (-p):", self.profile_combo)
 
         self.scheme_combo = QtWidgets.QComboBox()
         self.scheme_combo.setEditable(True)
         self.scheme_combo.addItems([""] + self.scheme_names)
+        self.scheme_combo.setToolTip("--colorScheme: Override the colour scheme")
         ed_layout.addRow("Color Scheme:", self.scheme_combo)
 
         self.title_edit = QtWidgets.QLineEdit()
-        self.title_edit.setPlaceholderText("Optional tab title")
-        ed_layout.addRow("Title:", self.title_edit)
+        self.title_edit.setPlaceholderText("Text shown in the tab header")
+        self.title_edit.setToolTip("--title: Set the tab title")
+        ed_layout.addRow("Tab Title (--title):", self.title_edit)
 
         color_row = QtWidgets.QHBoxLayout()
         self.tab_color_edit = QtWidgets.QLineEdit()
         self.tab_color_edit.setPlaceholderText("#RRGGBB")
+        self.tab_color_edit.setToolTip("--tabColor: Set tab accent colour")
         pick_btn = QtWidgets.QPushButton("Pick")
         pick_btn.setFixedWidth(50)
+        pick_btn.setToolTip("Open colour picker")
         pick_btn.clicked.connect(self.pick_color)
         color_row.addWidget(self.tab_color_edit)
         color_row.addWidget(pick_btn)
         ed_layout.addRow("Tab Color:", color_row)
 
+        # Starting directory with Browse and parent-process option
         dir_row = QtWidgets.QHBoxLayout()
         self.dir_edit = QtWidgets.QLineEdit()
-        self.dir_edit.setPlaceholderText("Starting directory")
+        self.dir_edit.setPlaceholderText("e.g. C:\\Users\\me\\projects")
+        self.dir_edit.setToolTip("-d: Starting directory for this tab/pane")
         dir_btn = QtWidgets.QPushButton("Browse")
         dir_btn.setFixedWidth(60)
+        dir_btn.setToolTip("Browse for a directory")
         dir_btn.clicked.connect(self.browse_dir)
         dir_row.addWidget(self.dir_edit)
         dir_row.addWidget(dir_btn)
-        ed_layout.addRow("Directory:", dir_row)
+        ed_layout.addRow("Directory (-d):", dir_row)
+
+        self.use_parent_dir_check = QtWidgets.QCheckBox("Use parent process directory")
+        self.use_parent_dir_check.setToolTip("Adds --useParentProcessDirectory flag: start in the directory of the calling process")
+        ed_layout.addRow("", self.use_parent_dir_check)
 
         self.cmdline_edit = QtWidgets.QLineEdit()
-        self.cmdline_edit.setPlaceholderText("Raw commandline (overrides profile)")
+        self.cmdline_edit.setPlaceholderText("e.g. powershell.exe -c \"echo Hello\"  or  wsl.exe")
+        self.cmdline_edit.setToolTip("Executable + args to run instead of the profile default.\nMust be a valid Windows executable path.\nExamples: cmd.exe /c dir, powershell.exe, wsl.exe, ssh.exe user@host")
         ed_layout.addRow("Commandline:", self.cmdline_edit)
 
         # Pane size - only visible for split-pane steps
-        self.pane_size_label = QtWidgets.QLabel("Pane Size:")
+        self.pane_size_label = QtWidgets.QLabel("Pane Size (--size):")
         self.pane_size_spin = QtWidgets.QDoubleSpinBox()
         self.pane_size_spin.setRange(0.05, 0.95)
         self.pane_size_spin.setSingleStep(0.05)
         self.pane_size_spin.setDecimals(2)
         self.pane_size_spin.setValue(0.5)
+        self.pane_size_spin.setToolTip("Fraction of parent pane size (0.05 to 0.95)")
         ed_layout.addRow(self.pane_size_label, self.pane_size_spin)
 
-        step_split.addWidget(editor_box, 2)
-        sb_layout.addLayout(step_split)
+        step_splitter.addWidget(editor_box)
+
+        # Set initial splitter sizes: 50/50 split
+        step_splitter.setSizes([400, 400])
+        step_splitter.setStretchFactor(0, 1)
+        step_splitter.setStretchFactor(1, 1)
+
+        sb_layout.addWidget(step_splitter)
         steps_box.setLayout(sb_layout)
         root.addWidget(steps_box, 1)
 
         # Preview section
-        preview_box = QtWidgets.QGroupBox("Command Preview")
+        preview_box = QtWidgets.QGroupBox("Command Preview  (edit manually or build above, then Copy/Run)")
         pv_layout = QtWidgets.QVBoxLayout()
         pv_layout.setSpacing(4)
         self.preview = QtWidgets.QTextEdit()
@@ -1053,13 +1089,16 @@ class Ui_MainWindow(object):
         run_row = QtWidgets.QHBoxLayout()
         self.shell_combo = QtWidgets.QComboBox()
         self.shell_combo.addItems(["PowerShell (escape `;)", "CMD (plain ;)"])
+        self.shell_combo.setToolTip("Which shell to use for escaping semicolons and running the command")
         run_row.addWidget(QtWidgets.QLabel("Shell:"))
         run_row.addWidget(self.shell_combo)
         run_row.addStretch(1)
         parse_btn = QtWidgets.QPushButton("Parse")
-        parse_btn.setToolTip("Parse the command from the preview box and populate the builder")
+        parse_btn.setToolTip("Parse the command text above and populate the builder steps")
         copy_btn = QtWidgets.QPushButton("Copy")
+        copy_btn.setToolTip("Copy the command to clipboard")
         run_btn = QtWidgets.QPushButton("Run")
+        run_btn.setToolTip("Execute the command in the selected shell")
         run_row.addWidget(parse_btn)
         run_row.addWidget(copy_btn)
         run_row.addWidget(run_btn)
@@ -1086,6 +1125,7 @@ class Ui_MainWindow(object):
         self.title_edit.textChanged.connect(self.auto_apply_step)
         self.tab_color_edit.textChanged.connect(self.auto_apply_step)
         self.dir_edit.textChanged.connect(self.auto_apply_step)
+        self.use_parent_dir_check.stateChanged.connect(self.auto_apply_step)
         self.cmdline_edit.textChanged.connect(self.auto_apply_step)
         self.pane_size_spin.valueChanged.connect(self.auto_apply_step)
 
@@ -2339,7 +2379,9 @@ Tips:
             attrs.append(f'--colorScheme "{step.color_scheme}"')
         if step.tab_color:
             attrs.append(f"--tabColor '{step.tab_color}'")
-        if step.starting_directory:
+        if step.use_parent_dir:
+            attrs.append("--useParentProcessDirectory")
+        elif step.starting_directory:
             attrs.append(f'-d "{step.starting_directory}"')
         if step.title:
             attrs.append(f'--title "{step.title}"')
@@ -2360,6 +2402,8 @@ Tips:
         self.title_edit.setText(step.title or "")
         self.tab_color_edit.setText(step.tab_color or "")
         self.dir_edit.setText(step.starting_directory or "")
+        self.use_parent_dir_check.setChecked(step.use_parent_dir)
+        self.dir_edit.setEnabled(not step.use_parent_dir)
         self.cmdline_edit.setText(step.commandline or "")
 
         # Show/hide pane size based on step type
@@ -2384,7 +2428,10 @@ Tips:
         step.color_scheme = self.scheme_combo.currentText().strip()
         step.title = self.title_edit.text().strip()
         step.tab_color = self.tab_color_edit.text().strip()
+        step.use_parent_dir = self.use_parent_dir_check.isChecked()
         step.starting_directory = self.dir_edit.text().strip()
+        # Disable directory field when use parent dir is checked
+        self.dir_edit.setEnabled(not step.use_parent_dir)
         step.commandline = self.cmdline_edit.text().strip()
         if step.kind == "split-pane":
             val = self.pane_size_spin.value()
@@ -2608,10 +2655,14 @@ Tips:
             if profile_match:
                 step.profile_name = profile_match.group(1)
 
-            # Starting directory
-            dir_match = re.search(r'-d\s+"([^"]+)"', cmd_str)
-            if dir_match:
-                step.starting_directory = dir_match.group(1)
+            # Starting directory / parent process directory
+            if '--useParentProcessDirectory' in cmd_str:
+                step.use_parent_dir = True
+                cmd_str = cmd_str.replace('--useParentProcessDirectory', '').strip()
+            else:
+                dir_match = re.search(r'-d\s+"([^"]+)"', cmd_str)
+                if dir_match:
+                    step.starting_directory = dir_match.group(1)
 
             # Title
             title_match = re.search(r'--title\s+"([^"]+)"', cmd_str)
@@ -2640,7 +2691,8 @@ Tips:
             temp_cmd = cmd_str
             for pattern in [r'-p\s+"[^"]+"', r'-d\s+"[^"]+"', r'--title\s+"[^"]+"',
                            r"--tabColor\s+'[^']+'", r'--tabColor\s+"[^"]+"',
-                           r'--colorScheme\s+"[^"]+"', r'--size\s+[\d.]+']:
+                           r'--colorScheme\s+"[^"]+"', r'--size\s+[\d.]+',
+                           r'--useParentProcessDirectory']:
                 temp_cmd = re.sub(pattern, '', temp_cmd)
 
             # What's left should be the commandline
