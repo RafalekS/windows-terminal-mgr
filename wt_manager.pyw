@@ -178,10 +178,16 @@ class Ui_MainWindow(object):
         self.commandBuilderTab = QtWidgets.QWidget()
         self.foldersTab = QtWidgets.QWidget()
 
-        self.tabWidget.addTab(self.profilesTab, "Profiles")
-        self.tabWidget.addTab(self.foldersTab, "Folders && New Tab Menu")
-        self.tabWidget.addTab(self.actionsTab, "Actions && Key Bindings")
-        self.tabWidget.addTab(self.commandBuilderTab, "WT Command Builder")
+        self.tabWidget.addTab(self.profilesTab, "  Profiles")
+        self.tabWidget.addTab(self.foldersTab, "  Folders && New Tab Menu")
+        self.tabWidget.addTab(self.actionsTab, "  Actions && Key Bindings")
+        self.tabWidget.addTab(self.commandBuilderTab, "  WT Command Builder")
+
+        # Set tab icons using Unicode characters via styled labels
+        self.tabWidget.setTabToolTip(0, "Manage terminal profiles")
+        self.tabWidget.setTabToolTip(1, "Organize the new tab dropdown menu")
+        self.tabWidget.setTabToolTip(2, "Configure keyboard shortcuts and actions")
+        self.tabWidget.setTabToolTip(3, "Build complex wt.exe commands")
 
         self.setupProfilesTab()
         self.setupActionsTab()
@@ -200,7 +206,7 @@ class Ui_MainWindow(object):
         self.saveButton = QtWidgets.QPushButton("Save")
         self.saveButton.setMinimumSize(120, 40)
         self.saveButton.setMaximumSize(120, 40)
-        self.saveButton.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }")
+        self.saveButton.setStyleSheet("QPushButton { background-color: #a6e3a1; color: #1e1e2e; font-weight: bold; } QPushButton:hover { background-color: #94e2d5; }")
         bottom_layout.addWidget(self.saveButton)
 
         main_layout.addLayout(bottom_layout)
@@ -652,7 +658,7 @@ Note: Actions and key bindings are separate!
 - Actions define what to do (stored in 'actions' array)
 - Key bindings link keys to action IDs (stored in 'keybindings' array)""")
         self.keyHelperLabel.setWordWrap(True)
-        self.keyHelperLabel.setStyleSheet("QLabel { background-color: #f0f0f0; color: #000000; padding: 10px; border: 1px solid #ccc; }")
+        self.keyHelperLabel.setStyleSheet("QLabel { background-color: #313244; color: #bac2de; padding: 10px; border: 1px solid #45475a; border-radius: 4px; }")
 
         help_layout.addWidget(self.keyHelperLabel)
         right_layout.addWidget(help_group)
@@ -933,7 +939,7 @@ Note: Actions and key bindings are separate!
         delete_layout = QtWidgets.QHBoxLayout()
         delete_layout.addStretch()
         self.deleteFolderButton = QtWidgets.QPushButton("Delete Item")
-        self.deleteFolderButton.setStyleSheet("QPushButton { background-color: #d32f2f; color: white; }")
+        self.deleteFolderButton.setStyleSheet("QPushButton { background-color: #f38ba8; color: #1e1e2e; } QPushButton:hover { background-color: #eba0ac; }")
         delete_layout.addWidget(self.deleteFolderButton)
         delete_layout.addStretch()
         folder_buttons_layout.addLayout(delete_layout)
@@ -1020,7 +1026,7 @@ Tips:
 • Folders can contain profiles, separators, or other folders
 • Use separators to group related profiles visually""")
         help_label.setWordWrap(True)
-        help_label.setStyleSheet("QLabel { background-color: #f0f0f0; color: #000000; padding: 10px; border: 1px solid #ccc; }")
+        help_label.setStyleSheet("QLabel { background-color: #313244; color: #bac2de; padding: 10px; border: 1px solid #45475a; border-radius: 4px; }")
 
         help_layout.addWidget(help_label)
         right_layout.addWidget(help_group)
@@ -1075,7 +1081,7 @@ Tips:
     def setUnsavedChanges(self):
         self.unsaved_changes = True
         self.statusLabel.setText("Unsaved changes - Click Save to apply")
-        self.statusLabel.setStyleSheet("QLabel { color: orange; }")
+        self.statusLabel.setStyleSheet("QLabel { color: #fab387; font-weight: bold; }")
 
     def getCurrentIndex(self):
         if self.listWidget.currentItem():
@@ -3148,17 +3154,104 @@ Tips:
         if dumpJson():
             self.unsaved_changes = False
             self.statusLabel.setText("Settings saved successfully!")
-            self.statusLabel.setStyleSheet("QLabel { color: green; }")
+            self.statusLabel.setStyleSheet("QLabel { color: #a6e3a1; }")
             QtCore.QTimer.singleShot(3000, lambda: self.statusLabel.setText(""))
         else:
             self.statusLabel.setText("Error saving settings!")
-            self.statusLabel.setStyleSheet("QLabel { color: red; }")
+            self.statusLabel.setStyleSheet("QLabel { color: #f38ba8; }")
 
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
     MainWindow = QtWidgets.QMainWindow()
     app.setStyle('Fusion')
+
+    # Global stylesheet for consistent look
+    app.setStyleSheet("""
+        QMainWindow { background-color: #1e1e2e; }
+        QWidget { background-color: #1e1e2e; color: #cdd6f4; }
+        QTabWidget::pane { border: 1px solid #45475a; background: #1e1e2e; }
+        QTabBar::tab {
+            background: #313244; color: #bac2de; border: 1px solid #45475a;
+            padding: 8px 16px; margin-right: 2px; border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+        }
+        QTabBar::tab:selected { background: #45475a; color: #cdd6f4; border-bottom-color: #45475a; }
+        QTabBar::tab:hover { background: #585b70; }
+        QGroupBox {
+            font-weight: bold; border: 1px solid #45475a; border-radius: 6px;
+            margin-top: 10px; padding-top: 14px; color: #cdd6f4;
+        }
+        QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 6px; }
+        QGroupBox::indicator { width: 13px; height: 13px; }
+        QGroupBox::indicator:checked { image: none; border: 2px solid #89b4fa; border-radius: 3px; background: #89b4fa; }
+        QGroupBox::indicator:unchecked { image: none; border: 2px solid #585b70; border-radius: 3px; background: #313244; }
+        QLineEdit, QTextEdit, QPlainTextEdit {
+            background-color: #313244; border: 1px solid #45475a; border-radius: 4px;
+            padding: 4px 6px; color: #cdd6f4; selection-background-color: #585b70;
+        }
+        QLineEdit:focus, QTextEdit:focus { border-color: #89b4fa; }
+        QLineEdit:read-only { background-color: #181825; color: #a6adc8; }
+        QComboBox {
+            background-color: #313244; border: 1px solid #45475a; border-radius: 4px;
+            padding: 4px 8px; color: #cdd6f4;
+        }
+        QComboBox::drop-down { border: none; width: 20px; }
+        QComboBox::down-arrow { image: none; border-left: 4px solid transparent;
+            border-right: 4px solid transparent; border-top: 6px solid #cdd6f4; }
+        QComboBox QAbstractItemView {
+            background-color: #313244; border: 1px solid #45475a; color: #cdd6f4;
+            selection-background-color: #45475a;
+        }
+        QSpinBox, QDoubleSpinBox {
+            background-color: #313244; border: 1px solid #45475a; border-radius: 4px;
+            padding: 4px; color: #cdd6f4;
+        }
+        QPushButton {
+            background-color: #45475a; color: #cdd6f4; border: 1px solid #585b70;
+            border-radius: 4px; padding: 6px 14px; font-weight: bold;
+        }
+        QPushButton:hover { background-color: #585b70; }
+        QPushButton:pressed { background-color: #313244; }
+        QListWidget, QTreeWidget {
+            background-color: #313244; border: 1px solid #45475a; border-radius: 4px;
+            color: #cdd6f4; alternate-background-color: #2a2a3d;
+        }
+        QListWidget::item:selected, QTreeWidget::item:selected { background-color: #45475a; }
+        QListWidget::item:hover, QTreeWidget::item:hover { background-color: #3a3a4d; }
+        QHeaderView::section {
+            background-color: #313244; color: #bac2de; border: 1px solid #45475a;
+            padding: 4px;
+        }
+        QScrollBar:vertical {
+            background: #1e1e2e; width: 12px; border: none;
+        }
+        QScrollBar::handle:vertical { background: #45475a; border-radius: 6px; min-height: 20px; }
+        QScrollBar::handle:vertical:hover { background: #585b70; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+        QScrollBar:horizontal {
+            background: #1e1e2e; height: 12px; border: none;
+        }
+        QScrollBar::handle:horizontal { background: #45475a; border-radius: 6px; min-width: 20px; }
+        QScrollBar::handle:horizontal:hover { background: #585b70; }
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }
+        QSlider::groove:horizontal {
+            height: 6px; background: #313244; border-radius: 3px;
+        }
+        QSlider::handle:horizontal {
+            width: 16px; height: 16px; margin: -5px 0;
+            background: #89b4fa; border-radius: 8px;
+        }
+        QSlider::handle:horizontal:hover { background: #b4d0fb; }
+        QCheckBox { spacing: 6px; }
+        QCheckBox::indicator { width: 16px; height: 16px; border-radius: 3px; border: 2px solid #585b70; }
+        QCheckBox::indicator:checked { background: #89b4fa; border-color: #89b4fa; }
+        QCheckBox::indicator:unchecked { background: #313244; }
+        QLabel { color: #bac2de; }
+        QScrollArea { border: none; }
+        QFrame[frameShape="4"] { color: #45475a; }
+        QToolTip { background-color: #313244; color: #cdd6f4; border: 1px solid #45475a; padding: 4px; }
+    """)
 
     # Try to load the icon using absolute path from script directory
     icon_path = SCRIPT_DIR / 'WT_config.ico'
