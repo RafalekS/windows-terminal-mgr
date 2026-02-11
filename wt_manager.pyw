@@ -28,13 +28,26 @@ SCRIPT_DIR = Path(__file__).parent.absolute()
 
 # Place in the "settings.json" directory
 homePath = os.getenv("HOMEPATH")
+if not homePath:
+    homePath = os.getenv("USERPROFILE", "")
+    if homePath and ":" in homePath:
+        # USERPROFILE is full path like C:\Users\name, strip drive letter
+        homePath = homePath[2:]
 
-if os.path.isdir(f"C:{homePath}\\LocalAppData\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState"):
-    os.chdir(f"C:{homePath}\\LocalAppData\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState")
-    settingsPath = f"C:{homePath}\\LocalAppData\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState"
-else:
-    os.chdir(f"C:{homePath}\\AppData\\Local\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState")
-    settingsPath = f"C:{homePath}\\AppData\\Local\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState"
+settingsPath = None
+for base in [f"C:{homePath}\\LocalAppData", f"C:{homePath}\\AppData\\Local"]:
+    candidate = f"{base}\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState"
+    if os.path.isdir(candidate):
+        settingsPath = candidate
+        break
+
+if not settingsPath:
+    print("Error: Could not find Windows Terminal settings directory.")
+    print(f"Searched with HOMEPATH='{homePath}'")
+    print("Expected: %HOMEPATH%\\LocalAppData\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState")
+    exit(1)
+
+os.chdir(settingsPath)
 
 # Create a backup of "settings.json" with timestamp
 backup_filename = f"{settingsPath}\\settings.json.bak_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -934,13 +947,23 @@ Tips:
     def changeFontSize(self, param):
         currentProfileIndex = self.getCurrentIndex()
         if currentProfileIndex >= 0:
-            data_schemes['profiles']['list'][currentProfileIndex]['fontSize'] = param
+            profile = data_schemes['profiles']['list'][currentProfileIndex]
+            if 'font' not in profile:
+                profile['font'] = {}
+            profile['font']['size'] = param
+            # Remove deprecated key if present
+            profile.pop('fontSize', None)
             self.setUnsavedChanges()
 
     def changeFont(self, param):
         currentProfileIndex = self.getCurrentIndex()
         if currentProfileIndex >= 0:
-            data_schemes['profiles']['list'][currentProfileIndex]['fontFace'] = self.fontBox.itemText(param)
+            profile = data_schemes['profiles']['list'][currentProfileIndex]
+            if 'font' not in profile:
+                profile['font'] = {}
+            profile['font']['face'] = self.fontBox.itemText(param)
+            # Remove deprecated key if present
+            profile.pop('fontFace', None)
             self.setUnsavedChanges()
 
     def changeOpacity(self):
@@ -1092,14 +1115,20 @@ Tips:
         if index >= 0:
             self.comboBox.setCurrentIndex(index)
 
-        # Update font
-        fontFace = profile.get('fontFace', 'Cascadia Mono')
+        # Update font - support both modern (font.face) and deprecated (fontFace)
+        font_obj = profile.get('font', {})
+        fontFace = font_obj.get('face') if isinstance(font_obj, dict) else None
+        if not fontFace:
+            fontFace = profile.get('fontFace', 'Cascadia Mono')
         index_fontBox = self.fontBox.findText(fontFace, QtCore.Qt.MatchFlag.MatchFixedString)
         if index_fontBox >= 0:
             self.fontBox.setCurrentIndex(index_fontBox)
 
-        # Update font size
-        self.fontSize.setValue(profile.get('fontSize', 12))
+        # Update font size - support both modern (font.size) and deprecated (fontSize)
+        fontSize = font_obj.get('size') if isinstance(font_obj, dict) else None
+        if fontSize is None:
+            fontSize = profile.get('fontSize', 12)
+        self.fontSize.setValue(fontSize)
 
         # Update background image
         self.backgroundImageEdit.setText(profile.get('backgroundImage', ''))
@@ -1165,12 +1194,17 @@ Tips:
     def updateProfileOrder(self):
         new_order = [self.listWidget.item(i).text() for i in range(self.listWidget.count())]
         profiles = data_schemes['profiles']['list']
+        # Build name->list of profiles mapping to handle duplicate names
+        name_to_profiles = {}
+        for profile in profiles:
+            name = profile.get('name', '')
+            if name not in name_to_profiles:
+                name_to_profiles[name] = []
+            name_to_profiles[name].append(profile)
         updated_profiles = []
         for name in new_order:
-            for profile in profiles:
-                if profile.get('name') == name:
-                    updated_profiles.append(profile)
-                    break
+            if name in name_to_profiles and name_to_profiles[name]:
+                updated_profiles.append(name_to_profiles[name].pop(0))
         data_schemes['profiles']['list'] = updated_profiles
         self.setUnsavedChanges()
 
@@ -1656,8 +1690,8 @@ Tips:
             if unbound_index < len(unbound_bindings):
                 reply = QtWidgets.QMessageBox.question(None, 'Delete Unbound Key',
                                                      'Are you sure you want to delete this unbound key binding?',
-                                                     QtWidgets.QMessageBox.StandardButton.Save | QtWidgets.QMessageBox.StandardButton.Discard | QtWidgets.QMessageBox.StandardButton.Cancel)
-                if reply == QtWidgets.QMessageBox.StandardButton.Save:
+                                                     QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No)
+                if reply == QtWidgets.QMessageBox.StandardButton.Yes:
                     binding_to_remove = unbound_bindings[unbound_index]
                     keybindings.remove(binding_to_remove)
                     self.loadActions()
@@ -2258,6 +2292,25 @@ Tips:
         # Search from root
         return search_entries(data_schemes.get('newTabMenu', []))
 
+    def findParentList(self, entry: dict) -> tuple:
+        """Find the list that contains this exact entry object (by identity, not equality).
+
+        Returns:
+            (parent_list, index) where parent_list is the list containing entry,
+            and index is the position within that list. Returns (None, -1) if not found.
+        """
+        def search(entries_list):
+            for i, e in enumerate(entries_list):
+                if e is entry:
+                    return (entries_list, i)
+                if e.get('type') == 'folder' and 'entries' in e:
+                    result = search(e['entries'])
+                    if result[0] is not None:
+                        return result
+            return (None, -1)
+
+        return search(data_schemes.get('newTabMenu', []))
+
     def onFolderSelectionChanged(self):
         """Handle folder tree selection change"""
         current_item = self.foldersTreeWidget.currentItem()
@@ -2599,7 +2652,10 @@ Tips:
             # Update the ACTUAL entry in data_schemes
             actual_entry['name'] = new_name
             icon_text = self.folderIconEdit.text().strip()
-            actual_entry['icon'] = icon_text if icon_text else None
+            if icon_text:
+                actual_entry['icon'] = icon_text
+            else:
+                actual_entry.pop('icon', None)
             actual_entry['allowEmpty'] = self.allowEmptyCheckBox.isChecked()
             actual_entry['inline'] = 'always' if self.inlineCheckBox.isChecked() else 'never'
 
@@ -2611,7 +2667,10 @@ Tips:
             if profile_guid:
                 actual_entry['profile'] = profile_guid
             icon_text = self.profileIconEdit.text().strip()
-            actual_entry['icon'] = icon_text if icon_text else None
+            if icon_text:
+                actual_entry['icon'] = icon_text
+            else:
+                actual_entry.pop('icon', None)
 
         # Reload and try to re-select the same item (use updated entry for folder name)
         self.loadFolders()
@@ -2643,17 +2702,15 @@ Tips:
         if reply != QtWidgets.QMessageBox.StandardButton.Yes:
             return
 
-        # Find and remove the entry
-        parent_item = current_item.parent()
-        if parent_item:
-            # Entry is in a folder
-            parent_entry = parent_item.data(0, QtCore.Qt.ItemDataRole.UserRole)
-            if parent_entry and 'entries' in parent_entry:
-                parent_entry['entries'].remove(entry)
+        # Use identity-based lookup to find and remove the exact entry
+        parent_list, idx = self.findParentList(entry)
+        if parent_list is not None and idx >= 0:
+            parent_list.pop(idx)
+            debug_print(f"DEBUG deleteFolderItem: Removed entry at index {idx}")
         else:
-            # Entry is in root
-            if 'newTabMenu' in data_schemes:
-                data_schemes['newTabMenu'].remove(entry)
+            debug_print("DEBUG deleteFolderItem: Could not find entry in data_schemes")
+            QtWidgets.QMessageBox.warning(None, "Error", "Could not find item in settings data.")
+            return
 
         self.loadFolders()
         self.setUnsavedChanges()
@@ -2663,154 +2720,64 @@ Tips:
         debug_print("DEBUG moveFolderItemUp: Function called")
         current_item = self.foldersTreeWidget.currentItem()
         if not current_item:
-            debug_print("DEBUG moveFolderItemUp: No item selected")
             return
 
         entry = current_item.data(0, QtCore.Qt.ItemDataRole.UserRole)
         if not entry:
-            debug_print("DEBUG moveFolderItemUp: No entry data")
             return
 
-        debug_print(f"DEBUG moveFolderItemUp: Moving {entry.get('type')} {entry.get('name', entry.get('profile', 'unknown'))}")
+        debug_print(f"DEBUG moveFolderItemUp: Moving {entry.get('type')} id={id(entry)}")
 
-        # Find the actual entry in data_schemes
-        actual_entry = self.findActualEntry(entry)
-        if not actual_entry:
-            debug_print(f"DEBUG moveFolderItemUp: Could not find actual entry in data_schemes")
+        # Use identity-based lookup to find the exact entry in its parent list
+        parent_list, idx = self.findParentList(entry)
+        if parent_list is None:
+            debug_print("DEBUG moveFolderItemUp: Could not find entry in data_schemes")
             QtWidgets.QMessageBox.warning(None, "Error", "Could not find item in settings data.")
             return
 
-        debug_print(f"DEBUG moveFolderItemUp: Found actual entry, id={id(actual_entry)}")
+        debug_print(f"DEBUG moveFolderItemUp: Found at index {idx} of {len(parent_list)} items")
 
-        parent_item = current_item.parent()
-        moved = False
-
-        if parent_item:
-            # Entry is in a folder - find the actual parent folder
-            debug_print("DEBUG moveFolderItemUp: Item is in a folder")
-            parent_entry = parent_item.data(0, QtCore.Qt.ItemDataRole.UserRole)
-            actual_parent = self.findActualEntry(parent_entry)
-
-            if actual_parent and 'entries' in actual_parent:
-                entries = actual_parent['entries']
-                try:
-                    # Find actual_entry in the entries list (should be by object identity now)
-                    idx = entries.index(actual_entry)
-                    debug_print(f"DEBUG moveFolderItemUp: Current index: {idx}, list length: {len(entries)}")
-                    if idx > 0:
-                        entries[idx], entries[idx - 1] = entries[idx - 1], entries[idx]
-                        moved = True
-                        debug_print(f"DEBUG moveFolderItemUp: Moved from {idx} to {idx-1}")
-                    else:
-                        debug_print("DEBUG moveFolderItemUp: Already at top of list")
-                except ValueError as e:
-                    debug_print(f"DEBUG moveFolderItemUp: ValueError: {e}")
-            else:
-                debug_print("DEBUG moveFolderItemUp: Could not find actual parent folder or it has no entries")
-        else:
-            # Entry is in root
-            debug_print("DEBUG moveFolderItemUp: Item is at root level")
-            if 'newTabMenu' in data_schemes:
-                entries = data_schemes['newTabMenu']
-                try:
-                    # Find actual_entry in the entries list
-                    idx = entries.index(actual_entry)
-                    debug_print(f"DEBUG moveFolderItemUp: Current index: {idx}, list length: {len(entries)}")
-                    if idx > 0:
-                        entries[idx], entries[idx - 1] = entries[idx - 1], entries[idx]
-                        moved = True
-                        debug_print(f"DEBUG moveFolderItemUp: Moved from {idx} to {idx-1}")
-                    else:
-                        debug_print("DEBUG moveFolderItemUp: Already at top of list")
-                except ValueError as e:
-                    debug_print(f"DEBUG moveFolderItemUp: ValueError: {e}")
-
-        if moved:
-            debug_print("DEBUG moveFolderItemUp: Reloading folders")
+        if idx > 0:
+            parent_list[idx], parent_list[idx - 1] = parent_list[idx - 1], parent_list[idx]
+            debug_print(f"DEBUG moveFolderItemUp: Swapped {idx} <-> {idx - 1}")
             self.loadFolders()
             self.setUnsavedChanges()
-            # Try to re-select the item (skip for separators as they're indistinguishable)
-            if actual_entry.get('type') != 'separator':
-                self.reselectItemByEntry(actual_entry)
+            # Re-select by identity: entry object is still the same reference
+            self.reselectItemByIdentity(entry)
         else:
-            debug_print("DEBUG moveFolderItemUp: Nothing moved")
+            debug_print("DEBUG moveFolderItemUp: Already at top")
 
     def moveFolderItemDown(self):
         """Move selected item down in its parent's list"""
         debug_print("DEBUG moveFolderItemDown: Function called")
         current_item = self.foldersTreeWidget.currentItem()
         if not current_item:
-            debug_print("DEBUG moveFolderItemDown: No item selected")
             return
 
         entry = current_item.data(0, QtCore.Qt.ItemDataRole.UserRole)
         if not entry:
-            debug_print("DEBUG moveFolderItemDown: No entry data")
             return
 
-        debug_print(f"DEBUG moveFolderItemDown: Moving {entry.get('type')} {entry.get('name', entry.get('profile', 'unknown'))}")
+        debug_print(f"DEBUG moveFolderItemDown: Moving {entry.get('type')} id={id(entry)}")
 
-        # Find the actual entry in data_schemes
-        actual_entry = self.findActualEntry(entry)
-        if not actual_entry:
-            debug_print(f"DEBUG moveFolderItemDown: Could not find actual entry in data_schemes")
+        # Use identity-based lookup to find the exact entry in its parent list
+        parent_list, idx = self.findParentList(entry)
+        if parent_list is None:
+            debug_print("DEBUG moveFolderItemDown: Could not find entry in data_schemes")
             QtWidgets.QMessageBox.warning(None, "Error", "Could not find item in settings data.")
             return
 
-        debug_print(f"DEBUG moveFolderItemDown: Found actual entry, id={id(actual_entry)}")
+        debug_print(f"DEBUG moveFolderItemDown: Found at index {idx} of {len(parent_list)} items")
 
-        parent_item = current_item.parent()
-        moved = False
-
-        if parent_item:
-            # Entry is in a folder - find the actual parent folder
-            debug_print("DEBUG moveFolderItemDown: Item is in a folder")
-            parent_entry = parent_item.data(0, QtCore.Qt.ItemDataRole.UserRole)
-            actual_parent = self.findActualEntry(parent_entry)
-
-            if actual_parent and 'entries' in actual_parent:
-                entries = actual_parent['entries']
-                try:
-                    # Find actual_entry in the entries list
-                    idx = entries.index(actual_entry)
-                    debug_print(f"DEBUG moveFolderItemDown: Current index: {idx}, list length: {len(entries)}")
-                    if idx < len(entries) - 1:
-                        entries[idx], entries[idx + 1] = entries[idx + 1], entries[idx]
-                        moved = True
-                        debug_print(f"DEBUG moveFolderItemDown: Moved from {idx} to {idx+1}")
-                    else:
-                        debug_print("DEBUG moveFolderItemDown: Already at bottom of list")
-                except ValueError as e:
-                    debug_print(f"DEBUG moveFolderItemDown: ValueError: {e}")
-            else:
-                debug_print("DEBUG moveFolderItemDown: Could not find actual parent folder or it has no entries")
-        else:
-            # Entry is in root
-            debug_print("DEBUG moveFolderItemDown: Item is at root level")
-            if 'newTabMenu' in data_schemes:
-                entries = data_schemes['newTabMenu']
-                try:
-                    # Find actual_entry in the entries list
-                    idx = entries.index(actual_entry)
-                    debug_print(f"DEBUG moveFolderItemDown: Current index: {idx}, list length: {len(entries)}")
-                    if idx < len(entries) - 1:
-                        entries[idx], entries[idx + 1] = entries[idx + 1], entries[idx]
-                        moved = True
-                        debug_print(f"DEBUG moveFolderItemDown: Moved from {idx} to {idx+1}")
-                    else:
-                        debug_print("DEBUG moveFolderItemDown: Already at bottom of list")
-                except ValueError as e:
-                    debug_print(f"DEBUG moveFolderItemDown: ValueError: {e}")
-
-        if moved:
-            debug_print("DEBUG moveFolderItemDown: Reloading folders")
+        if idx < len(parent_list) - 1:
+            parent_list[idx], parent_list[idx + 1] = parent_list[idx + 1], parent_list[idx]
+            debug_print(f"DEBUG moveFolderItemDown: Swapped {idx} <-> {idx + 1}")
             self.loadFolders()
             self.setUnsavedChanges()
-            # Try to re-select the item (skip for separators as they're indistinguishable)
-            if actual_entry.get('type') != 'separator':
-                self.reselectItemByEntry(actual_entry)
+            # Re-select by identity: entry object is still the same reference
+            self.reselectItemByIdentity(entry)
         else:
-            debug_print("DEBUG moveFolderItemDown: Nothing moved")
+            debug_print("DEBUG moveFolderItemDown: Already at bottom")
 
     def selectFolderByName(self, folder_name: str, parent_entry: Optional[dict] = None):
         """Select a folder in the tree by its name"""
@@ -2887,6 +2854,26 @@ Tips:
 
                 # Recursively search children
                 found = findItem(item, target_entry)
+                if found:
+                    return found
+            return None
+
+        item = findItem(None, entry)
+        if item:
+            self.foldersTreeWidget.setCurrentItem(item)
+            self.foldersTreeWidget.scrollToItem(item)
+
+    def reselectItemByIdentity(self, entry: dict):
+        """Re-select an item in the tree after reload using object identity (is).
+        Works correctly for separators and all other entry types."""
+        def findItem(parent_item, target):
+            count = parent_item.childCount() if parent_item else self.foldersTreeWidget.topLevelItemCount()
+            for i in range(count):
+                item = parent_item.child(i) if parent_item else self.foldersTreeWidget.topLevelItem(i)
+                item_entry = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+                if item_entry is target:
+                    return item
+                found = findItem(item, target)
                 if found:
                     return found
             return None
