@@ -669,181 +669,181 @@ class Ui_MainWindow(object):
         self.clearFieldsButton.clicked.connect(self.clearActionFields)
 
     def setupCommandBuilderTab(self):
-        """Setup the command builder tab from wt_cline.pyw"""
+        """Setup the command builder tab"""
         root = QtWidgets.QVBoxLayout(self.commandBuilderTab)
+        root.setContentsMargins(10, 10, 10, 10)
+        root.setSpacing(8)
 
         # Extract profiles and schemes for command builder
         self.profile_names = [item['name'] for item in data_schemes.get('profiles', {}).get('list', [])]
         user_schemes = [s.get('name') for s in data_schemes.get('schemes', []) if isinstance(s, dict) and s.get('name')]
         self.scheme_names = sorted(set(user_schemes + BUILTIN_SCHEMES))
 
-        # Global window options
-        global_box = QtWidgets.QGroupBox("Global window options")
+        # Global window options - collapsible, collapsed by default
+        global_box = QtWidgets.QGroupBox("Global Window Options")
+        global_box.setCheckable(True)
+        global_box.setChecked(False)
         g_layout = QtWidgets.QHBoxLayout()
+        g_layout.setSpacing(8)
 
-        size_box = QtWidgets.QGroupBox("--size (columns, rows)")
-        s_layout = QtWidgets.QHBoxLayout()
-        self.global_size_cols = QtWidgets.QSpinBox()
-        self.global_size_rows = QtWidgets.QSpinBox()
-        self.global_size_cols.setRange(0, 1000)
-        self.global_size_rows.setRange(0, 1000)
-        s_layout.addWidget(QtWidgets.QLabel("Columns"))
-        s_layout.addWidget(self.global_size_cols)
-        s_layout.addWidget(QtWidgets.QLabel("Rows"))
-        s_layout.addWidget(self.global_size_rows)
-        size_box.setLayout(s_layout)
+        # State checkboxes (most common)
+        state_w = QtWidgets.QWidget()
+        st_layout = QtWidgets.QVBoxLayout(state_w)
+        st_layout.setContentsMargins(0, 0, 0, 0)
+        self.global_maximized = QtWidgets.QCheckBox("Maximized")
+        self.global_fullscreen = QtWidgets.QCheckBox("Fullscreen")
+        self.global_focus = QtWidgets.QCheckBox("Focus mode")
+        self.global_maximized.stateChanged.connect(lambda state: self.global_fullscreen.setChecked(False) if state else None)
+        self.global_fullscreen.stateChanged.connect(lambda state: self.global_maximized.setChecked(False) if state else None)
+        st_layout.addWidget(self.global_maximized)
+        st_layout.addWidget(self.global_fullscreen)
+        st_layout.addWidget(self.global_focus)
 
-        pos_box = QtWidgets.QGroupBox("--pos (x, y)")
-        p_layout = QtWidgets.QHBoxLayout()
-        self.global_pos_x = QtWidgets.QSpinBox()
-        self.global_pos_y = QtWidgets.QSpinBox()
-        self.global_pos_x.setRange(0, 10000)
-        self.global_pos_y.setRange(0, 10000)
-        p_layout.addWidget(QtWidgets.QLabel("X"))
-        p_layout.addWidget(self.global_pos_x)
-        p_layout.addWidget(QtWidgets.QLabel("Y"))
-        p_layout.addWidget(self.global_pos_y)
-        pos_box.setLayout(p_layout)
-
-        window_box = QtWidgets.QGroupBox("--window")
-        w_layout = QtWidgets.QHBoxLayout()
+        # Window target
+        win_w = QtWidgets.QWidget()
+        win_l = QtWidgets.QFormLayout(win_w)
+        win_l.setContentsMargins(0, 0, 0, 0)
         self.window_combo = QtWidgets.QComboBox()
         self.window_combo.setEditable(True)
         self.window_combo.addItems(["", "new", "last"])
         self.window_combo.setEditText("")
-        w_layout.addWidget(QtWidgets.QLabel("Target"))
-        w_layout.addWidget(self.window_combo)
-        window_box.setLayout(w_layout)
+        win_l.addRow("Window:", self.window_combo)
 
-        state_box = QtWidgets.QGroupBox("State")
-        st_layout = QtWidgets.QVBoxLayout()
-        self.global_maximized = QtWidgets.QCheckBox("Maximized")
-        self.global_fullscreen = QtWidgets.QCheckBox("Fullscreen")
-        self.global_focus = QtWidgets.QCheckBox("Focus mode")
+        # Size & position (compact)
+        dims_w = QtWidgets.QWidget()
+        dims_l = QtWidgets.QFormLayout(dims_w)
+        dims_l.setContentsMargins(0, 0, 0, 0)
+        self.global_size_cols = QtWidgets.QSpinBox()
+        self.global_size_rows = QtWidgets.QSpinBox()
+        self.global_size_cols.setRange(0, 1000)
+        self.global_size_rows.setRange(0, 1000)
+        self.global_pos_x = QtWidgets.QSpinBox()
+        self.global_pos_y = QtWidgets.QSpinBox()
+        self.global_pos_x.setRange(0, 10000)
+        self.global_pos_y.setRange(0, 10000)
+        size_row = QtWidgets.QHBoxLayout()
+        size_row.addWidget(self.global_size_cols)
+        size_row.addWidget(QtWidgets.QLabel("x"))
+        size_row.addWidget(self.global_size_rows)
+        pos_row = QtWidgets.QHBoxLayout()
+        pos_row.addWidget(self.global_pos_x)
+        pos_row.addWidget(QtWidgets.QLabel(","))
+        pos_row.addWidget(self.global_pos_y)
+        dims_l.addRow("Size (c,r):", size_row)
+        dims_l.addRow("Pos (x,y):", pos_row)
 
-        # Make maximized and fullscreen mutually exclusive
-        self.global_maximized.stateChanged.connect(lambda state: self.global_fullscreen.setChecked(False) if state else None)
-        self.global_fullscreen.stateChanged.connect(lambda state: self.global_maximized.setChecked(False) if state else None)
-
-        st_layout.addWidget(self.global_maximized)
-        st_layout.addWidget(self.global_fullscreen)
-        st_layout.addWidget(self.global_focus)
-        state_box.setLayout(st_layout)
-
-        g_layout.addWidget(size_box)
-        g_layout.addWidget(pos_box)
-        g_layout.addWidget(window_box)
-        g_layout.addWidget(state_box)
+        g_layout.addWidget(state_w)
+        g_layout.addWidget(win_w)
+        g_layout.addWidget(dims_w)
         global_box.setLayout(g_layout)
         root.addWidget(global_box)
 
-        # Steps sequence and editor
-        steps_box = QtWidgets.QGroupBox("Command sequence")
+        # Steps list and editor in a splitter
+        steps_box = QtWidgets.QGroupBox("Command Steps")
         sb_layout = QtWidgets.QVBoxLayout()
+        sb_layout.setSpacing(6)
 
+        # Add buttons row
         btn_row = QtWidgets.QHBoxLayout()
-        add_tab_btn = QtWidgets.QPushButton("Add new-tab")
-        add_pane_h_btn = QtWidgets.QPushButton("Add split-pane -H")
-        add_pane_v_btn = QtWidgets.QPushButton("Add split-pane -V")
-        remove_btn = QtWidgets.QPushButton("Remove selected")
-        move_up_btn = QtWidgets.QPushButton("Move up")
-        move_down_btn = QtWidgets.QPushButton("Move down")
-        for b in (add_tab_btn, add_pane_h_btn, add_pane_v_btn, remove_btn, move_up_btn, move_down_btn):
-            btn_row.addWidget(b)
-
+        add_tab_btn = QtWidgets.QPushButton("+ New Tab")
+        add_pane_h_btn = QtWidgets.QPushButton("+ Split -H")
+        add_pane_v_btn = QtWidgets.QPushButton("+ Split -V")
+        remove_btn = QtWidgets.QPushButton("Remove")
+        remove_btn.setStyleSheet("QPushButton { background-color: #f38ba8; color: #1e1e2e; } QPushButton:hover { background-color: #eba0ac; }")
+        move_up_btn = QtWidgets.QPushButton("Up")
+        move_down_btn = QtWidgets.QPushButton("Down")
+        btn_row.addWidget(add_tab_btn)
+        btn_row.addWidget(add_pane_h_btn)
+        btn_row.addWidget(add_pane_v_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(move_up_btn)
+        btn_row.addWidget(move_down_btn)
+        btn_row.addWidget(remove_btn)
         sb_layout.addLayout(btn_row)
-        self.steps_list = QtWidgets.QListWidget()
-        sb_layout.addWidget(self.steps_list)
 
-        editor_box = QtWidgets.QGroupBox("Step editor")
-        ed_layout = QtWidgets.QHBoxLayout()
+        # Steps list + editor side by side
+        step_split = QtWidgets.QHBoxLayout()
+
+        self.steps_list = QtWidgets.QListWidget()
+        self.steps_list.setMaximumWidth(350)
+        step_split.addWidget(self.steps_list, 1)
+
+        # Step editor - form layout (auto-apply, no Apply button)
+        editor_box = QtWidgets.QGroupBox("Edit Selected Step")
+        ed_layout = QtWidgets.QFormLayout(editor_box)
+        ed_layout.setSpacing(6)
 
         self.profile_combo = QtWidgets.QComboBox()
         self.profile_combo.setEditable(True)
         self.profile_combo.addItems([""] + self.profile_names)
+        ed_layout.addRow("Profile:", self.profile_combo)
 
         self.scheme_combo = QtWidgets.QComboBox()
         self.scheme_combo.setEditable(True)
         self.scheme_combo.addItems([""] + self.scheme_names)
+        ed_layout.addRow("Color Scheme:", self.scheme_combo)
 
         self.title_edit = QtWidgets.QLineEdit()
-        self.title_edit.setPlaceholderText("Optional title")
+        self.title_edit.setPlaceholderText("Optional tab title")
+        ed_layout.addRow("Title:", self.title_edit)
 
+        color_row = QtWidgets.QHBoxLayout()
         self.tab_color_edit = QtWidgets.QLineEdit()
-        self.tab_color_edit.setPlaceholderText("#RRGGBB or #RGB")
-        pick_btn = QtWidgets.QPushButton("Pick…")
+        self.tab_color_edit.setPlaceholderText("#RRGGBB")
+        pick_btn = QtWidgets.QPushButton("Pick")
+        pick_btn.setFixedWidth(50)
         pick_btn.clicked.connect(self.pick_color)
+        color_row.addWidget(self.tab_color_edit)
+        color_row.addWidget(pick_btn)
+        ed_layout.addRow("Tab Color:", color_row)
 
+        dir_row = QtWidgets.QHBoxLayout()
         self.dir_edit = QtWidgets.QLineEdit()
         self.dir_edit.setPlaceholderText("Starting directory")
-        dir_btn = QtWidgets.QPushButton("Browse…")
+        dir_btn = QtWidgets.QPushButton("Browse")
+        dir_btn.setFixedWidth(60)
         dir_btn.clicked.connect(self.browse_dir)
+        dir_row.addWidget(self.dir_edit)
+        dir_row.addWidget(dir_btn)
+        ed_layout.addRow("Directory:", dir_row)
 
         self.cmdline_edit = QtWidgets.QLineEdit()
-        self.cmdline_edit.setPlaceholderText("Optional raw commandline (overrides -p)")
+        self.cmdline_edit.setPlaceholderText("Raw commandline (overrides profile)")
+        ed_layout.addRow("Commandline:", self.cmdline_edit)
 
+        # Pane size - only visible for split-pane steps
+        self.pane_size_label = QtWidgets.QLabel("Pane Size:")
         self.pane_size_spin = QtWidgets.QDoubleSpinBox()
         self.pane_size_spin.setRange(0.05, 0.95)
         self.pane_size_spin.setSingleStep(0.05)
         self.pane_size_spin.setDecimals(2)
         self.pane_size_spin.setValue(0.5)
+        ed_layout.addRow(self.pane_size_label, self.pane_size_spin)
 
-        apply_btn = QtWidgets.QPushButton("Apply to selected step")
-
-        left = QtWidgets.QVBoxLayout()
-        left.addWidget(QtWidgets.QLabel("Profile (-p)"))
-        left.addWidget(self.profile_combo)
-        left.addWidget(QtWidgets.QLabel("Color scheme (--colorScheme)"))
-        left.addWidget(self.scheme_combo)
-        left.addWidget(QtWidgets.QLabel("Title (--title)"))
-        left.addWidget(self.title_edit)
-
-        mid = QtWidgets.QVBoxLayout()
-        mid.addWidget(QtWidgets.QLabel("Tab color (--tabColor)"))
-        trow = QtWidgets.QHBoxLayout()
-        trow.addWidget(self.tab_color_edit)
-        trow.addWidget(pick_btn)
-        mid.addLayout(trow)
-        mid.addWidget(QtWidgets.QLabel("Starting directory (-d)"))
-        drow = QtWidgets.QHBoxLayout()
-        drow.addWidget(self.dir_edit)
-        drow.addWidget(dir_btn)
-        mid.addLayout(drow)
-        mid.addWidget(QtWidgets.QLabel("Raw commandline (overrides -p)"))
-        mid.addWidget(self.cmdline_edit)
-
-        right = QtWidgets.QVBoxLayout()
-        right.addWidget(QtWidgets.QLabel("Split pane size (--size, fraction)"))
-        right.addWidget(self.pane_size_spin)
-        right.addStretch()
-        right.addWidget(apply_btn)
-
-        ed_layout.addLayout(left)
-        ed_layout.addLayout(mid)
-        ed_layout.addLayout(right)
-        editor_box.setLayout(ed_layout)
-
-        sb_layout.addWidget(editor_box)
+        step_split.addWidget(editor_box, 2)
+        sb_layout.addLayout(step_split)
         steps_box.setLayout(sb_layout)
-        root.addWidget(steps_box)
+        root.addWidget(steps_box, 1)
 
-        # Preview / actions
-        preview_box = QtWidgets.QGroupBox("Command preview")
+        # Preview section
+        preview_box = QtWidgets.QGroupBox("Command Preview")
         pv_layout = QtWidgets.QVBoxLayout()
+        pv_layout.setSpacing(4)
         self.preview = QtWidgets.QTextEdit()
         self.preview.setReadOnly(False)
-        self.preview.setPlaceholderText("Command preview - You can also paste or type commands here and click 'Parse Command'")
+        self.preview.setMaximumHeight(60)
+        self.preview.setPlaceholderText("Paste a wt command here and click Parse, or build one above")
         pv_layout.addWidget(self.preview)
         run_row = QtWidgets.QHBoxLayout()
-        parse_btn = QtWidgets.QPushButton("Parse Command")
-        parse_btn.setToolTip("Parse the command from the preview box and populate the builder")
-        copy_btn = QtWidgets.QPushButton("Copy")
-        run_btn = QtWidgets.QPushButton("Run")
         self.shell_combo = QtWidgets.QComboBox()
         self.shell_combo.addItems(["PowerShell (escape `;)", "CMD (plain ;)"])
         run_row.addWidget(QtWidgets.QLabel("Shell:"))
         run_row.addWidget(self.shell_combo)
         run_row.addStretch(1)
+        parse_btn = QtWidgets.QPushButton("Parse")
+        parse_btn.setToolTip("Parse the command from the preview box and populate the builder")
+        copy_btn = QtWidgets.QPushButton("Copy")
+        run_btn = QtWidgets.QPushButton("Run")
         run_row.addWidget(parse_btn)
         run_row.addWidget(copy_btn)
         run_row.addWidget(run_btn)
@@ -858,12 +858,24 @@ class Ui_MainWindow(object):
         remove_btn.clicked.connect(self.remove_selected)
         move_up_btn.clicked.connect(self.move_cmd_up)
         move_down_btn.clicked.connect(self.move_cmd_down)
-        apply_btn.clicked.connect(self.apply_step)
         self.steps_list.currentItemChanged.connect(self.populate_editor_from_selection)
         self.shell_combo.currentIndexChanged.connect(self.refresh_preview)
         parse_btn.clicked.connect(self.parse_command)
         copy_btn.clicked.connect(self.copy_command)
         run_btn.clicked.connect(self.run_command)
+
+        # Auto-apply: connect editor fields to auto_apply_step
+        self.profile_combo.currentTextChanged.connect(self.auto_apply_step)
+        self.scheme_combo.currentTextChanged.connect(self.auto_apply_step)
+        self.title_edit.textChanged.connect(self.auto_apply_step)
+        self.tab_color_edit.textChanged.connect(self.auto_apply_step)
+        self.dir_edit.textChanged.connect(self.auto_apply_step)
+        self.cmdline_edit.textChanged.connect(self.auto_apply_step)
+        self.pane_size_spin.valueChanged.connect(self.auto_apply_step)
+
+        # Initial state: hide pane size
+        self.pane_size_label.setVisible(False)
+        self.pane_size_spin.setVisible(False)
 
         self.refresh_preview()
 
@@ -2098,6 +2110,8 @@ Tips:
     def populate_editor_from_selection(self, current: Optional[QtWidgets.QListWidgetItem], prev: Optional[QtWidgets.QListWidgetItem]):
         if not current:
             return
+        # Block auto-apply signals while populating
+        self._populating_editor = True
         step: CommandStep = current.data(QtCore.Qt.ItemDataRole.UserRole)
         self.profile_combo.setCurrentText(step.profile_name or "")
         self.scheme_combo.setCurrentText(step.color_scheme or "")
@@ -2105,12 +2119,21 @@ Tips:
         self.tab_color_edit.setText(step.tab_color or "")
         self.dir_edit.setText(step.starting_directory or "")
         self.cmdline_edit.setText(step.commandline or "")
-        if step.kind == "split-pane" and step.pane_size is not None:
+
+        # Show/hide pane size based on step type
+        is_split = step.kind == "split-pane"
+        self.pane_size_label.setVisible(is_split)
+        self.pane_size_spin.setVisible(is_split)
+        if is_split and step.pane_size is not None:
             self.pane_size_spin.setValue(step.pane_size)
         else:
             self.pane_size_spin.setValue(0.5)
+        self._populating_editor = False
 
-    def apply_step(self):
+    def auto_apply_step(self):
+        """Auto-apply editor changes to the selected step (no Apply button needed)."""
+        if getattr(self, '_populating_editor', False):
+            return
         item = self.steps_list.currentItem()
         if not item:
             return
