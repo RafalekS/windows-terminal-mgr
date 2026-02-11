@@ -2582,6 +2582,22 @@ Tips:
         """Handle folder tree selection change"""
         current_item = self.foldersTreeWidget.currentItem()
 
+        # Update move button states based on position
+        can_move_up = False
+        can_move_down = False
+        can_delete = False
+        if current_item:
+            entry = current_item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+            if entry and entry.get('type') not in ('remainingProfiles', '_virtual_remaining'):
+                can_delete = True
+                parent_list, idx = self.findParentList(entry)
+                if parent_list is not None:
+                    can_move_up = idx > 0
+                    can_move_down = idx < len(parent_list) - 1
+        self.moveFolderUpButton.setEnabled(can_move_up)
+        self.moveFolderDownButton.setEnabled(can_move_down)
+        self.deleteFolderButton.setEnabled(can_delete)
+
         # Clear all fields
         self.folderNameEdit.clear()
         self.folderIconEdit.clear()
