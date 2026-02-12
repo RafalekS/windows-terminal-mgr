@@ -7,6 +7,7 @@ import datetime
 import subprocess
 import sys
 import argparse
+import uuid as _uuid
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
@@ -69,8 +70,10 @@ def dumpJson():
         backup_filename = f"{settingsPath}\\settings.json.bak_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
         copyfile(f"{settingsPath}\\settings.json", backup_filename)
 
+        # Strip internal UIDs before writing to disk
+        clean_data = strip_uids(data_schemes)
         with open("settings.json", "w", encoding='utf-8') as file:
-            commentjson.dump(data_schemes, file, indent=2, ensure_ascii=False)
+            commentjson.dump(clean_data, file, indent=2, ensure_ascii=False)
         return True
     except Exception as e:
         print(f"Error saving settings.json: {e}")
@@ -92,6 +95,29 @@ data_list = [item['name'] for item in data_schemes.get('schemes', [])]
 profiles_list = [item['name'] for item in data_schemes.get('profiles', {}).get('list', [])]
 fonts = matplotlib.font_manager.fontManager.ttflist
 font_list = list(dict.fromkeys(sorted([f.name for f in fonts], key=str.lower)))
+
+# UID key used to track entry identity across tree reloads
+_UID_KEY = '_wt_uid'
+
+def stamp_uids(entries):
+    """Stamp unique IDs on all newTabMenu entries so we can track identity reliably."""
+    for entry in entries:
+        if isinstance(entry, dict):
+            if _UID_KEY not in entry:
+                entry[_UID_KEY] = str(_uuid.uuid4())
+            if entry.get('type') == 'folder' and 'entries' in entry:
+                stamp_uids(entry['entries'])
+
+def strip_uids(obj):
+    """Recursively remove _wt_uid keys before saving to disk."""
+    if isinstance(obj, dict):
+        return {k: strip_uids(v) for k, v in obj.items() if k != _UID_KEY}
+    elif isinstance(obj, list):
+        return [strip_uids(item) for item in obj]
+    return obj
+
+# Stamp UIDs on existing menu entries at load time
+stamp_uids(data_schemes.get('newTabMenu', []))
 
 # Common Windows Terminal actions for dropdown
 COMMON_ACTIONS = [
@@ -402,7 +428,7 @@ class Ui_MainWindow(object):
         self.setupCommandBuilderTab()
         self.setupFoldersTab()
 
-        # Bottom panel with save button and status
+        # Bottom panel with status
         bottom_layout = QtWidgets.QHBoxLayout()
 
         # Status label
@@ -410,17 +436,9 @@ class Ui_MainWindow(object):
         self.statusLabel.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         bottom_layout.addWidget(self.statusLabel)
 
-        # Save button
-        self.saveButton = QtWidgets.QPushButton("Save")
-        self.saveButton.setMinimumSize(120, 40)
-        self.saveButton.setMaximumSize(120, 40)
-        self.saveButton.setStyleSheet("QPushButton { background-color: #6dba65; color: #ffffff; font-weight: bold; } QPushButton:hover { background-color: #5aa852; }")
-        bottom_layout.addWidget(self.saveButton)
-
         main_layout.addLayout(bottom_layout)
 
-        # Connect save button
-        self.saveButton.clicked.connect(self.dumpOnSave)
+        # Save button will be created in setupProfilesTab and placed in the left panel
 
         # Mark UI as initialized
         self.ui_initialized = True
@@ -482,6 +500,21 @@ class Ui_MainWindow(object):
         profile_mgmt_layout.addWidget(self.deleteProfileButton, 1, 0, 1, 2)
 
         left_layout.addLayout(profile_mgmt_layout)
+
+        # Separator before Save
+        save_separator = QtWidgets.QFrame()
+        save_separator.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+        save_separator.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        left_layout.addWidget(save_separator)
+
+        # Save button - prominent in left panel
+        self.saveButton = QtWidgets.QPushButton("Save")
+        self.saveButton.setMinimumSize(120, 40)
+        self.saveButton.setMaximumSize(300, 40)
+        self.saveButton.setStyleSheet("QPushButton { background-color: #6dba65; color: #ffffff; font-weight: bold; } QPushButton:hover { background-color: #5aa852; }")
+        self.saveButton.clicked.connect(self.dumpOnSave)
+        left_layout.addWidget(self.saveButton)
+
         left_layout.addStretch()
 
         main_layout.addWidget(left_widget)
@@ -506,7 +539,7 @@ class Ui_MainWindow(object):
             edit = QtWidgets.QLineEdit()
             edit.setPlaceholderText(placeholder)
             btn = QtWidgets.QPushButton("Pick...")
-            btn.setMaximumWidth(80)
+            btn.setMaximumWidth(90)
             btn.clicked.connect(lambda: self._pickColorInto(edit))
             layout.addWidget(edit)
             layout.addWidget(btn)
@@ -537,7 +570,7 @@ class Ui_MainWindow(object):
         icon_layout = QtWidgets.QHBoxLayout()
         self.iconEdit = QtWidgets.QLineEdit()
         self.iconBrowseButton = QtWidgets.QPushButton("Browse...")
-        self.iconBrowseButton.setMaximumWidth(80)
+        self.iconBrowseButton.setMaximumWidth(90)
         icon_layout.addWidget(self.iconEdit)
         icon_layout.addWidget(self.iconBrowseButton)
         general_layout.addRow("Icon:", icon_layout)
@@ -593,7 +626,7 @@ class Ui_MainWindow(object):
         self.cursorColorEdit = QtWidgets.QLineEdit()
         self.cursorColorEdit.setPlaceholderText("#RRGGBB")
         cursor_color_btn = QtWidgets.QPushButton("Pick...")
-        cursor_color_btn.setMaximumWidth(80)
+        cursor_color_btn.setMaximumWidth(90)
         cursor_color_btn.clicked.connect(lambda: self._pickColorInto(self.cursorColorEdit))
         cursor_layout.addWidget(self.cursorColorEdit, 2)
         cursor_layout.addWidget(cursor_color_btn)
@@ -636,7 +669,7 @@ class Ui_MainWindow(object):
         bg_path_layout = QtWidgets.QHBoxLayout()
         self.backgroundImageEdit = QtWidgets.QLineEdit()
         self.pushButton = QtWidgets.QPushButton("Browse...")
-        self.pushButton.setMaximumWidth(80)
+        self.pushButton.setMaximumWidth(90)
         bg_path_layout.addWidget(self.backgroundImageEdit)
         bg_path_layout.addWidget(self.pushButton)
         bgimg_layout.addRow("Image Path:", bg_path_layout)
@@ -784,12 +817,15 @@ class Ui_MainWindow(object):
         self.actionsTable.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
         self.actionsTable.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
         self.actionsTable.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.actionsTable.horizontalHeader().setStretchLastSection(True)
-        self.actionsTable.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
-        self.actionsTable.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeMode.Stretch)
-        self.actionsTable.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+        self.actionsTable.setSortingEnabled(True)
+        self.actionsTable.horizontalHeader().setStretchLastSection(False)
+        self.actionsTable.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Interactive)
         self.actionsTable.verticalHeader().setVisible(False)
         self.actionsTable.setAlternatingRowColors(True)
+
+        # Restore column widths from QSettings
+        self._restoreActionsColumnWidths()
+
         main_layout.addWidget(self.actionsTable, 3)
 
         # Editor panel
@@ -805,7 +841,7 @@ class Ui_MainWindow(object):
         self.keysEdit = QtWidgets.QLineEdit()
         self.keysEdit.setPlaceholderText("e.g. ctrl+shift+t  (comma-separate for multiple)")
         self.recordKeyButton = QtWidgets.QPushButton("Record...")
-        self.recordKeyButton.setFixedWidth(70)
+        self.recordKeyButton.setMinimumWidth(90)
         self.recordKeyButton.setToolTip("Click to record a key combination")
         self.recordKeyButton.clicked.connect(self.recordShortcut)
         shortcut_row.addWidget(self.keysEdit)
@@ -844,6 +880,7 @@ class Ui_MainWindow(object):
         # Buttons row
         btn_layout = QtWidgets.QHBoxLayout()
         self.addActionButton = QtWidgets.QPushButton("Add New")
+        self.addActionButton.setStyleSheet("QPushButton { background-color: #6dba65; color: #ffffff; } QPushButton:hover { background-color: #5aa852; }")
         self.updateActionButton = QtWidgets.QPushButton("Save Changes")
         self.updateActionButton.setStyleSheet("QPushButton { background-color: #5b8bd4; color: #ffffff; } QPushButton:hover { background-color: #4a7ac3; }")
         self.deleteActionButton = QtWidgets.QPushButton("Delete")
@@ -877,12 +914,29 @@ class Ui_MainWindow(object):
 
         # Connect signals
         self.actionsTable.currentCellChanged.connect(self.onActionTableSelectionChanged)
+        self.actionsTable.horizontalHeader().sectionResized.connect(self._saveActionsColumnWidths)
         self.addActionButton.clicked.connect(self.addAction)
         self.updateActionButton.clicked.connect(self.updateAction)
         self.deleteActionButton.clicked.connect(self.deleteAction)
         self.moveActionUpButton.clicked.connect(self.moveActionUp)
         self.moveActionDownButton.clicked.connect(self.moveActionDown)
         self.clearFieldsButton.clicked.connect(self.clearActionFields)
+
+    def _saveActionsColumnWidths(self):
+        """Save actions table column widths to QSettings"""
+        settings = QtCore.QSettings("WTManager", "ActionsTable")
+        header = self.actionsTable.horizontalHeader()
+        for col in range(self.actionsTable.columnCount()):
+            settings.setValue(f"col{col}", header.sectionSize(col))
+
+    def _restoreActionsColumnWidths(self):
+        """Restore actions table column widths from QSettings"""
+        settings = QtCore.QSettings("WTManager", "ActionsTable")
+        header = self.actionsTable.horizontalHeader()
+        defaults = [140, 200, 160, 140]
+        for col in range(self.actionsTable.columnCount()):
+            width = settings.value(f"col{col}", defaults[col] if col < len(defaults) else 100, type=int)
+            header.resizeSection(col, width)
 
     def setupCommandBuilderTab(self):
         """Setup the command builder tab"""
@@ -1027,7 +1081,7 @@ class Ui_MainWindow(object):
         self.tab_color_edit.setPlaceholderText("#RRGGBB")
         self.tab_color_edit.setToolTip("--tabColor: Set tab accent colour")
         pick_btn = QtWidgets.QPushButton("Pick")
-        pick_btn.setFixedWidth(50)
+        pick_btn.setMinimumWidth(70)
         pick_btn.setToolTip("Open colour picker")
         pick_btn.clicked.connect(self.pick_color)
         color_row.addWidget(self.tab_color_edit)
@@ -1040,7 +1094,7 @@ class Ui_MainWindow(object):
         self.dir_edit.setPlaceholderText("e.g. C:\\Users\\me\\projects")
         self.dir_edit.setToolTip("-d: Starting directory for this tab/pane")
         dir_btn = QtWidgets.QPushButton("Browse")
-        dir_btn.setFixedWidth(60)
+        dir_btn.setMinimumWidth(80)
         dir_btn.setToolTip("Browse for a directory")
         dir_btn.clicked.connect(self.browse_dir)
         dir_row.addWidget(self.dir_edit)
@@ -1906,6 +1960,7 @@ Tips:
     # ========== Actions Tab Methods ==========
 
     def loadActions(self):
+        self.actionsTable.setSortingEnabled(False)  # Disable during population
         self.actionsTable.setRowCount(0)
         actions = data_schemes.get('actions', [])
         keybindings = data_schemes.get('keybindings', [])
@@ -1992,6 +2047,8 @@ Tips:
             self.actionsTable.setItem(row, 1, name_item)
             self.actionsTable.setItem(row, 2, command_item)
             self.actionsTable.setItem(row, 3, id_item)
+
+        self.actionsTable.setSortingEnabled(True)  # Re-enable after population
 
     def _getActionRowMeta(self, row: int):
         """Return (row_type, data_index) tuple stored in the table row, or (None, -1)."""
@@ -2740,10 +2797,43 @@ Tips:
         header.resizeSection(1, col1_width)
         debug_print(f"DEBUG: Restored column widths: {col0_width}, {col1_width}")
 
+    def _getExpandedUids(self):
+        """Collect UIDs of all currently expanded tree items."""
+        expanded = set()
+        def walk(parent_item):
+            count = parent_item.childCount() if parent_item else self.foldersTreeWidget.topLevelItemCount()
+            for i in range(count):
+                item = parent_item.child(i) if parent_item else self.foldersTreeWidget.topLevelItem(i)
+                if item.isExpanded():
+                    entry = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+                    if entry and entry.get(_UID_KEY):
+                        expanded.add(entry[_UID_KEY])
+                walk(item)
+        walk(None)
+        return expanded
+
+    def _restoreExpandedUids(self, expanded_uids):
+        """Re-expand tree items whose UIDs are in the set."""
+        def walk(parent_item):
+            count = parent_item.childCount() if parent_item else self.foldersTreeWidget.topLevelItemCount()
+            for i in range(count):
+                item = parent_item.child(i) if parent_item else self.foldersTreeWidget.topLevelItem(i)
+                entry = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+                if entry and entry.get(_UID_KEY) in expanded_uids:
+                    item.setExpanded(True)
+                walk(item)
+        walk(None)
+
     def loadFolders(self):
         """Load the newTabMenu structure into the tree widget"""
         debug_print(f"DEBUG loadFolders: Clearing tree and reloading from data_schemes")
         debug_print(f"DEBUG loadFolders: data_schemes has {len(data_schemes.get('newTabMenu', []))} root items")
+
+        # Save expanded state before clearing
+        expanded_uids = self._getExpandedUids()
+
+        # Ensure all entries have UIDs
+        stamp_uids(data_schemes.get('newTabMenu', []))
 
         self.foldersTreeWidget.clear()
         new_tab_menu = data_schemes.get('newTabMenu', [])
@@ -2751,6 +2841,9 @@ Tips:
         for i, entry in enumerate(new_tab_menu):
             debug_print(f"DEBUG loadFolders: Adding item {i}: type={entry.get('type')}, name={entry.get('name', 'N/A')}")
             self.addTreeItem(entry, self.foldersTreeWidget)
+
+        # Restore expanded state
+        self._restoreExpandedUids(expanded_uids)
 
         debug_print(f"DEBUG loadFolders: Tree now has {self.foldersTreeWidget.topLevelItemCount()} top-level items")
 
@@ -2928,15 +3021,20 @@ Tips:
         return search_entries(data_schemes.get('newTabMenu', []))
 
     def findParentList(self, entry: dict) -> tuple:
-        """Find the list that contains this exact entry object (by identity, not equality).
+        """Find the list that contains this entry using its unique _wt_uid.
 
         Returns:
             (parent_list, index) where parent_list is the list containing entry,
             and index is the position within that list. Returns (None, -1) if not found.
         """
+        uid = entry.get(_UID_KEY)
+        if not uid:
+            debug_print(f"DEBUG findParentList: Entry has no UID! type={entry.get('type')}")
+            return (None, -1)
+
         def search(entries_list):
             for i, e in enumerate(entries_list):
-                if e is entry:
+                if e.get(_UID_KEY) == uid:
                     return (entries_list, i)
                 if e.get('type') == 'folder' and 'entries' in e:
                     result = search(e['entries'])
@@ -3075,7 +3173,8 @@ Tips:
             'icon': None,
             'entries': [],
             'allowEmpty': True,
-            'inline': 'never'
+            'inline': 'never',
+            _UID_KEY: str(_uuid.uuid4())
         }
 
         # Determine where to add
@@ -3084,9 +3183,10 @@ Tips:
         if current_item:
             parent_entry = current_item.data(0, QtCore.Qt.ItemDataRole.UserRole)
             if parent_entry and parent_entry.get('type') == 'folder':
-                # Add to selected folder - find the actual folder in data_schemes
-                actual_folder = self.findActualEntry(parent_entry)
-                if actual_folder:
+                # Add to selected folder - find by UID
+                parent_list, idx = self.findParentList(parent_entry)
+                if parent_list is not None:
+                    actual_folder = parent_list[idx]
                     if 'entries' not in actual_folder:
                         actual_folder['entries'] = []
                     actual_folder['entries'].append(new_folder)
@@ -3138,7 +3238,8 @@ Tips:
         new_profile_entry = {
             'type': 'profile',
             'profile': profile_guid,
-            'icon': None
+            'icon': None,
+            _UID_KEY: str(_uuid.uuid4())
         }
 
         # Determine where to add based on selection
@@ -3151,9 +3252,10 @@ Tips:
             debug_print(f"DEBUG addProfileToMenu: Current selection type: {current_entry.get('type') if current_entry else 'None'}")
 
             if current_entry and current_entry.get('type') == 'folder':
-                # Selected item is a folder - find the actual folder in data_schemes
-                actual_folder = self.findActualEntry(current_entry)
-                if actual_folder:
+                # Selected item is a folder - find by UID
+                parent_list, idx = self.findParentList(current_entry)
+                if parent_list is not None:
+                    actual_folder = parent_list[idx]
                     if 'entries' not in actual_folder:
                         actual_folder['entries'] = []
                     actual_folder['entries'].append(new_profile_entry)
@@ -3161,7 +3263,7 @@ Tips:
                     added_location = f"folder '{actual_folder.get('name')}'"
                     debug_print(f"DEBUG addProfileToMenu: Added to folder: {actual_folder.get('name')}, now has {len(actual_folder['entries'])} entries")
                 else:
-                    debug_print(f"DEBUG addProfileToMenu: Could not find actual folder entry")
+                    debug_print(f"DEBUG addProfileToMenu: Could not find actual folder entry by UID")
                     QtWidgets.QMessageBox.warning(None, "Error", "Could not find folder in settings data.")
                     return
             else:
@@ -3170,9 +3272,9 @@ Tips:
                 if parent_item:
                     parent_entry = parent_item.data(0, QtCore.Qt.ItemDataRole.UserRole)
                     if parent_entry and parent_entry.get('type') == 'folder':
-                        # Find the actual parent folder in data_schemes
-                        actual_parent = self.findActualEntry(parent_entry)
-                        if actual_parent:
+                        parent_list, idx = self.findParentList(parent_entry)
+                        if parent_list is not None:
+                            actual_parent = parent_list[idx]
                             if 'entries' not in actual_parent:
                                 actual_parent['entries'] = []
                             actual_parent['entries'].append(new_profile_entry)
@@ -3180,7 +3282,7 @@ Tips:
                             added_location = f"parent folder '{actual_parent.get('name')}'"
                             debug_print(f"DEBUG addProfileToMenu: Added to parent folder: {actual_parent.get('name')}")
                         else:
-                            debug_print(f"DEBUG addProfileToMenu: Could not find actual parent folder entry")
+                            debug_print(f"DEBUG addProfileToMenu: Could not find actual parent folder entry by UID")
                             QtWidgets.QMessageBox.warning(None, "Error", "Could not find parent folder in settings data.")
                             return
                     else:
@@ -3214,7 +3316,8 @@ Tips:
             data_schemes['newTabMenu'] = []
 
         new_separator = {
-            'type': 'separator'
+            'type': 'separator',
+            _UID_KEY: str(_uuid.uuid4())
         }
 
         # Determine where to add based on selection
@@ -3225,16 +3328,17 @@ Tips:
             current_entry = current_item.data(0, QtCore.Qt.ItemDataRole.UserRole)
 
             if current_entry and current_entry.get('type') == 'folder':
-                # Selected item is a folder - add to this folder
-                actual_folder = self.findActualEntry(current_entry)
-                if actual_folder:
+                # Selected item is a folder - find it in data_schemes by UID and add to it
+                parent_list, idx = self.findParentList(current_entry)
+                if parent_list is not None:
+                    actual_folder = parent_list[idx]
                     if 'entries' not in actual_folder:
                         actual_folder['entries'] = []
                     actual_folder['entries'].append(new_separator)
                     added_location = f"folder '{actual_folder.get('name')}'"
                     debug_print(f"DEBUG addSeparator: Added to folder: {actual_folder.get('name')}")
                 else:
-                    debug_print("DEBUG addSeparator: Could not find actual folder entry")
+                    debug_print("DEBUG addSeparator: Could not find folder entry by UID")
                     QtWidgets.QMessageBox.warning(None, "Error", "Could not find folder in settings data.")
                     return
             else:
@@ -3243,16 +3347,16 @@ Tips:
                 if parent_item:
                     parent_entry = parent_item.data(0, QtCore.Qt.ItemDataRole.UserRole)
                     if parent_entry and parent_entry.get('type') == 'folder':
-                        # Find the actual parent folder in data_schemes
-                        actual_parent = self.findActualEntry(parent_entry)
-                        if actual_parent:
+                        parent_list, idx = self.findParentList(parent_entry)
+                        if parent_list is not None:
+                            actual_parent = parent_list[idx]
                             if 'entries' not in actual_parent:
                                 actual_parent['entries'] = []
                             actual_parent['entries'].append(new_separator)
                             added_location = f"parent folder '{actual_parent.get('name')}'"
                             debug_print(f"DEBUG addSeparator: Added to parent folder: {actual_parent.get('name')}")
                         else:
-                            debug_print("DEBUG addSeparator: Could not find actual parent folder entry")
+                            debug_print("DEBUG addSeparator: Could not find parent folder by UID")
                             QtWidgets.QMessageBox.warning(None, "Error", "Could not find parent folder in settings data.")
                             return
                     else:
@@ -3291,12 +3395,13 @@ Tips:
         entry_type = entry.get('type', 'unknown')
         old_name = entry.get('name', '') if entry_type == 'folder' else ''
 
-        # Find the actual entry in data_schemes BEFORE modifying anything
-        actual_entry = self.findActualEntry(entry)
-        if not actual_entry:
+        # Find the actual entry in data_schemes using UID
+        parent_list, idx = self.findParentList(entry)
+        if parent_list is None:
             QtWidgets.QMessageBox.warning(None, "Error", "Could not find entry in settings data.")
             debug_print(f"DEBUG updateFolderItem: Could not find entry in data_schemes: {entry}")
             return
+        actual_entry = parent_list[idx]
 
         debug_print(f"DEBUG updateFolderItem: Found actual entry, id={id(actual_entry)}")
 
@@ -3488,30 +3593,27 @@ Tips:
             self.foldersTreeWidget.scrollToItem(item)
 
     def reselectItemByEntry(self, entry: dict):
-        """Re-select an item in the tree after reload"""
+        """Re-select an item in the tree after reload using UID."""
+        uid = entry.get(_UID_KEY)
+        if uid:
+            # Use UID-based reselect (same as reselectItemByIdentity)
+            self.reselectItemByIdentity(entry)
+            return
+
+        # Fallback: match by properties
         def findItem(parent_item, target_entry):
             for i in range(parent_item.childCount() if parent_item else self.foldersTreeWidget.topLevelItemCount()):
                 item = parent_item.child(i) if parent_item else self.foldersTreeWidget.topLevelItem(i)
                 item_entry = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
 
-                # Use identity comparison to match exact object (important for separators)
-                # Since UserRole stores a copy, we need to match by properties
                 entry_type = target_entry.get('type')
-                if entry_type == 'separator':
-                    # For separators, we can't distinguish them, so just match any separator
-                    # This is a known limitation
-                    if item_entry.get('type') == 'separator':
-                        return item
-                elif entry_type == 'folder':
-                    # Match folder by name
+                if entry_type == 'folder':
                     if item_entry.get('type') == 'folder' and item_entry.get('name') == target_entry.get('name'):
                         return item
                 elif entry_type == 'profile':
-                    # Match profile by GUID
                     if item_entry.get('type') == 'profile' and item_entry.get('profile') == target_entry.get('profile'):
                         return item
 
-                # Recursively search children
                 found = findItem(item, target_entry)
                 if found:
                     return found
@@ -3523,21 +3625,25 @@ Tips:
             self.foldersTreeWidget.scrollToItem(item)
 
     def reselectItemByIdentity(self, entry: dict):
-        """Re-select an item in the tree after reload using object identity (is).
+        """Re-select an item in the tree after reload using _wt_uid.
         Works correctly for separators and all other entry types."""
-        def findItem(parent_item, target):
+        uid = entry.get(_UID_KEY)
+        if not uid:
+            return
+
+        def findItem(parent_item):
             count = parent_item.childCount() if parent_item else self.foldersTreeWidget.topLevelItemCount()
             for i in range(count):
                 item = parent_item.child(i) if parent_item else self.foldersTreeWidget.topLevelItem(i)
                 item_entry = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
-                if item_entry is target:
+                if item_entry and item_entry.get(_UID_KEY) == uid:
                     return item
-                found = findItem(item, target)
+                found = findItem(item)
                 if found:
                     return found
             return None
 
-        item = findItem(None, entry)
+        item = findItem(None)
         if item:
             self.foldersTreeWidget.setCurrentItem(item)
             self.foldersTreeWidget.scrollToItem(item)
@@ -3618,7 +3724,7 @@ if __name__ == "__main__":
             background-color: #ffffff; border: 1px solid #c8bfe0; border-radius: 4px;
             color: #2d2d3d; alternate-background-color: #f5f0ff; gridline-color: #d5d0e0;
         }
-        QTableWidget::item:selected { background-color: #d4cceb; }
+        QTableWidget::item:selected { background-color: #d4cceb; color: #2d2d3d; }
         QTableWidget::item:hover { background-color: #ede8f5; }
         QHeaderView::section {
             background-color: #e8e0f5; color: #3d3555; border: 1px solid #c8bfe0;
