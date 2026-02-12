@@ -848,11 +848,117 @@ class Ui_MainWindow(object):
         shortcut_row.addWidget(self.recordKeyButton)
         editor_layout.addRow("Shortcut:", shortcut_row)
 
+        # Action type selector
+        self.actionTypeCombo = QtWidgets.QComboBox()
+        self.actionTypeCombo.addItems([
+            "Run Command (New Tab)",
+            "Run Command (Split Pane)",
+            "Send Text to Terminal",
+            "Built-in Action"
+        ])
+        editor_layout.addRow("Action Type:", self.actionTypeCombo)
+
+        # Stacked widget for contextual fields
+        self.actionStack = QtWidgets.QStackedWidget()
+
+        # --- Page 0 & 1: Run Command (New Tab / Split Pane) ---
+        run_page = QtWidgets.QWidget()
+        run_layout = QtWidgets.QFormLayout(run_page)
+        run_layout.setSpacing(6)
+        run_layout.setContentsMargins(0, 0, 0, 0)
+
+        cmd_row = QtWidgets.QHBoxLayout()
+        self.actCmdEdit = QtWidgets.QLineEdit()
+        self.actCmdEdit.setPlaceholderText("e.g. cmd.exe /c c:\\Scripts\\start.cmd  or  wsl.exe")
+        self.actCmdEdit.setToolTip("The executable + args to run. For scripts use: cmd.exe /c script.cmd")
+        act_cmd_browse = QtWidgets.QPushButton("Browse...")
+        act_cmd_browse.setMinimumWidth(90)
+        act_cmd_browse.setToolTip("Browse for a script or executable")
+        act_cmd_browse.clicked.connect(self._browseActionScript)
+        cmd_row.addWidget(self.actCmdEdit)
+        cmd_row.addWidget(act_cmd_browse)
+        run_layout.addRow("Command/Script:", cmd_row)
+
+        self.actProfileCombo = QtWidgets.QComboBox()
+        self.actProfileCombo.setEditable(True)
+        self.actProfileCombo.addItems(["(default)"] + profiles_list)
+        self.actProfileCombo.setToolTip("Which profile to use (leave as default for current default profile)")
+        run_layout.addRow("Profile:", self.actProfileCombo)
+
+        dir_row = QtWidgets.QHBoxLayout()
+        self.actDirEdit = QtWidgets.QLineEdit()
+        self.actDirEdit.setPlaceholderText("Working directory (optional)")
+        act_dir_browse = QtWidgets.QPushButton("Browse...")
+        act_dir_browse.setMinimumWidth(90)
+        act_dir_browse.setToolTip("Browse for a working directory")
+        act_dir_browse.clicked.connect(self._browseActionDir)
+        dir_row.addWidget(self.actDirEdit)
+        dir_row.addWidget(act_dir_browse)
+        run_layout.addRow("Working Dir:", dir_row)
+
+        self.actTitleEdit = QtWidgets.QLineEdit()
+        self.actTitleEdit.setPlaceholderText("Tab title (optional)")
+        run_layout.addRow("Tab Title:", self.actTitleEdit)
+
+        # Split-pane specific options (shown/hidden dynamically)
+        self.splitOptsWidget = QtWidgets.QWidget()
+        split_opts_layout = QtWidgets.QHBoxLayout(self.splitOptsWidget)
+        split_opts_layout.setContentsMargins(0, 0, 0, 0)
+        self.actSplitH = QtWidgets.QRadioButton("Horizontal")
+        self.actSplitV = QtWidgets.QRadioButton("Vertical")
+        self.actSplitH.setChecked(True)
+        split_opts_layout.addWidget(self.actSplitH)
+        split_opts_layout.addWidget(self.actSplitV)
+        split_opts_layout.addWidget(QtWidgets.QLabel("Size:"))
+        self.actSplitSize = QtWidgets.QDoubleSpinBox()
+        self.actSplitSize.setRange(0.05, 0.95)
+        self.actSplitSize.setSingleStep(0.05)
+        self.actSplitSize.setValue(0.5)
+        self.actSplitSize.setToolTip("Fraction of parent pane (0.05 to 0.95)")
+        split_opts_layout.addWidget(self.actSplitSize)
+        split_opts_layout.addStretch()
+        run_layout.addRow("Split:", self.splitOptsWidget)
+        self.splitOptsWidget.setVisible(False)  # Hidden for New Tab type
+
+        self.actionStack.addWidget(run_page)  # Index 0: Run Command
+
+        # --- Page 1: Send Text to Terminal ---
+        send_page = QtWidgets.QWidget()
+        send_layout = QtWidgets.QFormLayout(send_page)
+        send_layout.setSpacing(6)
+        send_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.actSendText = QtWidgets.QLineEdit()
+        self.actSendText.setPlaceholderText("e.g. git status  or  tmux  or  ping 192.168.0.1")
+        self.actSendText.setToolTip("Text that will be typed into the current terminal")
+        send_layout.addRow("Text:", self.actSendText)
+
+        self.actSendEnter = QtWidgets.QCheckBox("Press Enter after sending")
+        self.actSendEnter.setChecked(True)
+        self.actSendEnter.setToolTip("Append a newline so the command runs immediately")
+        send_layout.addRow("", self.actSendEnter)
+
+        self.actionStack.addWidget(send_page)  # Index 1: Send Text
+
+        # --- Page 2: Built-in Action ---
+        builtin_page = QtWidgets.QWidget()
+        builtin_layout = QtWidgets.QFormLayout(builtin_page)
+        builtin_layout.setSpacing(6)
+        builtin_layout.setContentsMargins(0, 0, 0, 0)
+
         self.commandActionCombo = QtWidgets.QComboBox()
         self.commandActionCombo.setEditable(True)
         for action in COMMON_ACTIONS:
             self.commandActionCombo.addItem(action)
-        editor_layout.addRow("Command:", self.commandActionCombo)
+        self.commandActionCombo.setToolTip("Select or type a Windows Terminal built-in action")
+        builtin_layout.addRow("Command:", self.commandActionCombo)
+
+        self.actionStack.addWidget(builtin_page)  # Index 2: Built-in
+
+        editor_layout.addRow(self.actionStack)
+
+        # Connect action type combo to switch pages
+        self.actionTypeCombo.currentIndexChanged.connect(self._onActionTypeChanged)
 
         # Advanced section (collapsed)
         adv_group = QtWidgets.QGroupBox("Advanced")
@@ -867,8 +973,8 @@ class Ui_MainWindow(object):
 
         self.actionArgsEdit = QtWidgets.QTextEdit()
         self.actionArgsEdit.setMaximumHeight(80)
-        self.actionArgsEdit.setPlaceholderText('JSON arguments, e.g. {"action": "newTab", "index": 0}')
-        adv_layout.addRow("Arguments:", self.actionArgsEdit)
+        self.actionArgsEdit.setPlaceholderText('Raw JSON override - if filled, this takes priority over the fields above')
+        adv_layout.addRow("JSON Override:", self.actionArgsEdit)
 
         self.iconPathEdit = QtWidgets.QLineEdit()
         self.iconPathEdit.setPlaceholderText("Path to icon (optional)")
@@ -2063,21 +2169,16 @@ Tips:
     def onActionTableSelectionChanged(self, currentRow, currentCol, prevRow, prevCol):
         row_type, data_idx = self._getActionRowMeta(currentRow)
 
-        # Clear fields first
-        self.actionNameEdit.clear()
-        self.commandActionCombo.setCurrentText('')
-        self.keysEdit.clear()
-        self.actionArgsEdit.clear()
-        self.iconPathEdit.clear()
-        self.actionIdEdit.clear()
+        # Clear all fields first
+        self.clearActionFields()
 
         if row_type == 'unbound':
-            # Unbound key entry
             keybindings = data_schemes.get('keybindings', [])
             unbound_bindings = [b for b in keybindings if b.get('id') is None]
             if data_idx < len(unbound_bindings):
                 self.keysEdit.setText(unbound_bindings[data_idx].get('keys', ''))
                 self.actionNameEdit.setText("DISABLED/UNBOUND")
+                self.actionTypeCombo.setCurrentIndex(3)  # Built-in
                 self.commandActionCombo.setCurrentText("null")
             return
 
@@ -2101,22 +2202,56 @@ Tips:
                         associated_keys.append(key)
             self.keysEdit.setText(', '.join(associated_keys))
 
-            # Populate command and arguments
+            # Detect action type and populate contextual fields
             command = action.get('command', '')
             if isinstance(command, dict):
-                command_action = command.get('action', '')
-                if command_action:
-                    self.commandActionCombo.setCurrentText(command_action)
-                elif command:
-                    self.commandActionCombo.setCurrentText(list(command.keys())[0])
-                self.actionArgsEdit.setPlainText(commentjson.dumps(command, indent=2))
-            elif isinstance(command, str):
-                self.commandActionCombo.setCurrentText(command)
-                self.actionArgsEdit.setPlainText('')
-            else:
-                self.commandActionCombo.setCurrentText(str(command) if command else '')
-                if command and not isinstance(command, str):
+                cmd_action = command.get('action', '')
+
+                if cmd_action == 'newTab':
+                    self.actionTypeCombo.setCurrentIndex(0)
+                    self.actCmdEdit.setText(command.get('commandline', ''))
+                    profile = command.get('profile', '')
+                    self.actProfileCombo.setCurrentText(profile if profile else '(default)')
+                    self.actDirEdit.setText(command.get('startingDirectory', ''))
+                    self.actTitleEdit.setText(command.get('tabTitle', ''))
+
+                elif cmd_action == 'splitPane':
+                    self.actionTypeCombo.setCurrentIndex(1)
+                    self.actCmdEdit.setText(command.get('commandline', ''))
+                    profile = command.get('profile', '')
+                    self.actProfileCombo.setCurrentText(profile if profile else '(default)')
+                    self.actDirEdit.setText(command.get('startingDirectory', ''))
+                    self.actTitleEdit.setText(command.get('tabTitle', ''))
+                    split_dir = command.get('split', 'horizontal')
+                    if split_dir == 'vertical':
+                        self.actSplitV.setChecked(True)
+                    else:
+                        self.actSplitH.setChecked(True)
+                    self.actSplitSize.setValue(command.get('size', 0.5))
+
+                elif cmd_action == 'sendInput':
+                    self.actionTypeCombo.setCurrentIndex(2)
+                    input_text = command.get('input', '')
+                    if input_text.endswith('\n'):
+                        self.actSendText.setText(input_text[:-1])
+                        self.actSendEnter.setChecked(True)
+                    else:
+                        self.actSendText.setText(input_text)
+                        self.actSendEnter.setChecked(False)
+
+                else:
+                    # Other dict command - show as built-in with raw JSON
+                    self.actionTypeCombo.setCurrentIndex(3)
+                    self.commandActionCombo.setCurrentText(cmd_action or '')
                     self.actionArgsEdit.setPlainText(commentjson.dumps(command, indent=2))
+
+            elif isinstance(command, str):
+                self.actionTypeCombo.setCurrentIndex(3)  # Built-in
+                self.commandActionCombo.setCurrentText(command)
+            else:
+                self.actionTypeCombo.setCurrentIndex(3)
+                if command:
+                    self.commandActionCombo.setCurrentText(str(command))
 
             # Populate icon path
             self.iconPathEdit.setText(action.get('icon', ''))
@@ -2168,25 +2303,12 @@ Tips:
             if new_action_id:
                 action['id'] = new_action_id
 
-            # Update command
-            args_text = self.actionArgsEdit.toPlainText().strip()
-            if args_text:
-                try:
-                    args = commentjson.loads(args_text)
-                    action['command'] = args
-                except:
-                    simple_command = self.commandActionCombo.currentText().strip()
-                    if simple_command:
-                        action['command'] = simple_command
-                    else:
-                        action['command'] = args_text
-            else:
-                simple_command = self.commandActionCombo.currentText().strip()
-                if simple_command:
-                    action['command'] = simple_command
-                else:
-                    if 'command' in action:
-                        del action['command']
+            # Update command from contextual fields
+            command = self._buildCommandFromFields()
+            if command is not None:
+                action['command'] = command
+            elif 'command' in action:
+                del action['command']
 
             # Update icon
             icon_text = self.iconPathEdit.text().strip()
@@ -2220,48 +2342,28 @@ Tips:
         action_name = self.actionNameEdit.text().strip()
         action_id = self.actionIdEdit.text().strip()
         keys_text = self.keysEdit.text().strip()
-        args_text = self.actionArgsEdit.toPlainText().strip()
-        simple_command = self.commandActionCombo.currentText().strip()
         icon_text = self.iconPathEdit.text().strip()
 
+        # Build command from contextual fields
+        command = self._buildCommandFromFields()
+
         # Generate action ID if not provided
-        if not action_id and (action_name or simple_command):
-            import uuid
-            base_name = action_name or simple_command
-            # Create a user-friendly ID
-            safe_name = ''.join(c for c in base_name if c.isalnum() or c in '._-')
-            action_id = f"User.{safe_name}.{str(uuid.uuid4())[:8]}"
+        if not action_id and (action_name or command):
+            base_name = action_name or (command if isinstance(command, str) else 'action')
+            safe_name = ''.join(c for c in str(base_name) if c.isalnum() or c in '._-')
+            action_id = f"User.{safe_name}.{str(_uuid.uuid4())[:8]}"
 
         if not action_id:
             QtWidgets.QMessageBox.warning(None, "Invalid Action",
-                                        "Please provide an Action ID or Name.")
+                                        "Please provide a Name or fill in some fields.")
             return
 
         # Build new action
-        new_action = {
-            'id': action_id
-        }
-
-        # Add name if provided
+        new_action = {'id': action_id}
         if action_name:
             new_action['name'] = action_name
-
-        # Add command (prioritize JSON args over simple command)
-        if args_text:
-            try:
-                # Try to parse as JSON for complex commands
-                args = commentjson.loads(args_text)
-                new_action['command'] = args
-            except:
-                # If JSON parsing fails, use simple command or raw text
-                if simple_command:
-                    new_action['command'] = simple_command
-                else:
-                    new_action['command'] = args_text
-        elif simple_command:
-            new_action['command'] = simple_command
-
-        # Add icon if provided
+        if command is not None:
+            new_action['command'] = command
         if icon_text:
             new_action['icon'] = icon_text
 
@@ -2272,14 +2374,9 @@ Tips:
         if keys_text:
             key_list = [key.strip() for key in keys_text.split(',') if key.strip()]
             for key in key_list:
-                new_binding = {
-                    'id': action_id,
-                    'keys': key
-                }
-                data_schemes['keybindings'].append(new_binding)
+                data_schemes['keybindings'].append({'id': action_id, 'keys': key})
 
         self.loadActions()
-        # Select the newly added action (last action row before unbound keys)
         actions_count = len(data_schemes.get('actions', []))
         if actions_count > 0:
             self.actionsTable.selectRow(actions_count - 1)
@@ -2350,14 +2447,115 @@ Tips:
                 self.actionsTable.selectRow(current_row + 1)
                 self.setUnsavedChanges()
 
+    def _onActionTypeChanged(self, index):
+        """Switch visible fields based on action type selection."""
+        if index <= 1:
+            # Run Command (New Tab=0, Split Pane=1)
+            self.actionStack.setCurrentIndex(0)
+            self.splitOptsWidget.setVisible(index == 1)
+        elif index == 2:
+            # Send Text to Terminal
+            self.actionStack.setCurrentIndex(1)
+        else:
+            # Built-in Action
+            self.actionStack.setCurrentIndex(2)
+
+    def _browseActionScript(self):
+        """Browse for a script or executable."""
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            None, "Select Script or Executable", "",
+            "Scripts & Executables (*.cmd *.bat *.exe *.ps1 *.py *.sh);;All Files (*)")
+        if path:
+            # For .cmd/.bat, prepend cmd.exe /c; for .ps1, prepend powershell -File
+            ext = path.rsplit('.', 1)[-1].lower() if '.' in path else ''
+            if ext in ('cmd', 'bat'):
+                self.actCmdEdit.setText(f'cmd.exe /c "{path}"')
+            elif ext == 'ps1':
+                self.actCmdEdit.setText(f'powershell.exe -File "{path}"')
+            else:
+                self.actCmdEdit.setText(f'"{path}"')
+
+    def _browseActionDir(self):
+        """Browse for a working directory."""
+        path = QtWidgets.QFileDialog.getExistingDirectory(None, "Select Working Directory")
+        if path:
+            self.actDirEdit.setText(path)
+
+    def _buildCommandFromFields(self):
+        """Build the command dict/string from the current editor fields.
+        Returns the command value for the action dict."""
+        # Raw JSON override takes priority
+        raw = self.actionArgsEdit.toPlainText().strip()
+        if raw:
+            try:
+                return commentjson.loads(raw)
+            except:
+                pass  # Fall through to field-based build
+
+        action_type = self.actionTypeCombo.currentIndex()
+
+        if action_type <= 1:
+            # Run Command (New Tab / Split Pane)
+            cmd = {}
+            cmd['action'] = 'newTab' if action_type == 0 else 'splitPane'
+
+            cmdline = self.actCmdEdit.text().strip()
+            if cmdline:
+                cmd['commandline'] = cmdline
+
+            profile = self.actProfileCombo.currentText().strip()
+            if profile and profile != '(default)':
+                cmd['profile'] = profile
+
+            work_dir = self.actDirEdit.text().strip()
+            if work_dir:
+                cmd['startingDirectory'] = work_dir
+
+            title = self.actTitleEdit.text().strip()
+            if title:
+                cmd['tabTitle'] = title
+
+            if action_type == 1:
+                # Split Pane extras
+                cmd['split'] = 'horizontal' if self.actSplitH.isChecked() else 'vertical'
+                size = self.actSplitSize.value()
+                if abs(size - 0.5) > 0.01:
+                    cmd['size'] = round(size, 2)
+
+            return cmd
+
+        elif action_type == 2:
+            # Send Text to Terminal
+            text = self.actSendText.text()
+            if not text:
+                return None
+            if self.actSendEnter.isChecked():
+                text += '\n'
+            return {'action': 'sendInput', 'input': text}
+
+        else:
+            # Built-in Action
+            simple = self.commandActionCombo.currentText().strip()
+            return simple if simple else None
+
     def clearActionFields(self):
         """Helper method to clear all action input fields"""
         self.actionNameEdit.clear()
         self.actionIdEdit.clear()
-        self.commandActionCombo.setCurrentText('')
         self.keysEdit.clear()
         self.actionArgsEdit.clear()
         self.iconPathEdit.clear()
+        self.actionTypeCombo.setCurrentIndex(0)
+        self.actCmdEdit.clear()
+        self.actProfileCombo.setCurrentIndex(0)
+        self.actDirEdit.clear()
+        self.actTitleEdit.clear()
+        self.actSendText.clear()
+        self.actSendEnter.setChecked(True)
+        self.commandActionCombo.setCurrentText('')
+        self.actSplitH.setChecked(True)
+        self.actSplitSize.setValue(0.5)
+        self.splitOptsWidget.setVisible(False)
 
     def recordShortcut(self):
         """Open key recorder dialog and populate the shortcut field."""
