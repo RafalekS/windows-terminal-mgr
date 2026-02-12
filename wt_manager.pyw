@@ -1840,7 +1840,17 @@ Tips:
             self.closeOnExitBox.setCurrentIndex(idx_c)
 
         bellStyle = profile.get('bellStyle', 'audible')
-        idx_b = self.bellStyleBox.findText(bellStyle, QtCore.Qt.MatchFlag.MatchFixedString)
+        if isinstance(bellStyle, list):
+            # WT supports list format like ["audible", "visual"] - map to combo value
+            if set(bellStyle) >= {'audible', 'visual'}:
+                bellStyle = 'all'
+            elif 'visual' in bellStyle:
+                bellStyle = 'visual'
+            elif 'audible' in bellStyle:
+                bellStyle = 'audible'
+            else:
+                bellStyle = 'none'
+        idx_b = self.bellStyleBox.findText(str(bellStyle), QtCore.Qt.MatchFlag.MatchFixedString)
         if idx_b >= 0:
             self.bellStyleBox.setCurrentIndex(idx_b)
 
