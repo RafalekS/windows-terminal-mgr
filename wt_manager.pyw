@@ -1,6 +1,7 @@
 from shutil import copyfile
 from PyQt6 import QtCore, QtGui, QtWidgets
 import commentjson
+import json
 import os
 import matplotlib.font_manager
 import datetime
@@ -27,6 +28,197 @@ def debug_print(*args_print, **kwargs):
 # Store the script directory before changing to settings directory
 SCRIPT_DIR = Path(__file__).parent.absolute()
 
+# ── App configuration ──────────────────────────────────────────────────────────
+_DEFAULT_CONFIG = {
+    "window": {"width": 1400, "height": 900, "min_width": 1200, "min_height": 700},
+    "profiles_panel": {"min_width": 250, "max_width": 300},
+    "defaults": {"font_size": 12, "history_size": 9001},
+    "backup": {"enabled": True, "max_count": 10},
+    "theme": "light",
+    "wt_path_override": ""
+}
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    result = base.copy()
+    for k, v in override.items():
+        if k in result and isinstance(result[k], dict) and isinstance(v, dict):
+            result[k] = _deep_merge(result[k], v)
+        else:
+            result[k] = v
+    return result
+
+def _load_app_config() -> dict:
+    config_path = SCRIPT_DIR / 'config' / 'settings.json'
+    if config_path.exists():
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                loaded = json.load(f)
+            return _deep_merge(_DEFAULT_CONFIG, loaded)
+        except Exception as e:
+            debug_print(f"Config load error: {e}")
+    return _DEFAULT_CONFIG.copy()
+
+def _save_app_config(config: dict) -> bool:
+    config_path = SCRIPT_DIR / 'config' / 'settings.json'
+    try:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"Config save error: {e}")
+        return False
+
+# ── Theme loading ──────────────────────────────────────────────────────────────
+_DEFAULT_LIGHT_COLORS = {
+    "bg_main": "#f5f0ff", "bg_widget": "#ffffff", "bg_alt": "#f5f0ff",
+    "bg_input": "#ffffff", "bg_readonly": "#ede8f5",
+    "bg_tab": "#e8e0f5", "bg_tab_selected": "#f5f0ff", "bg_tab_hover": "#ded5f0",
+    "bg_header": "#e8e0f5", "bg_tooltip": "#ffffff",
+    "bg_scrollbar": "#f0eaf8", "bg_scrollbar_handle": "#c8bfe0", "bg_scrollbar_handle_hover": "#b0a8c8",
+    "border": "#c8bfe0", "border_focus": "#7c6bc4",
+    "text_primary": "#2d2d3d", "text_secondary": "#3d3555", "text_muted": "#6b6580", "text_tab": "#3d3555",
+    "selection_bg": "#d4cceb",
+    "slider_handle": "#7c6bc4", "slider_handle_hover": "#9585d0", "slider_groove": "#d5d0e0",
+    "checkbox_checked": "#7c6bc4",
+    "groupbox_indicator_checked": "#7c6bc4", "groupbox_indicator_unchecked_bg": "#e8e0f5",
+    "groupbox_indicator_border": "#b0a8c8",
+    "btn_bg": "#e0d8f0", "btn_hover": "#d0c5e8", "btn_pressed": "#c0b5d8",
+    "btn_disabled_bg": "#ede8f5", "btn_disabled_text": "#a09ab0", "btn_disabled_border": "#d5d0e0",
+    "btn_border": "#b0a8c8",
+    "btn_save_bg": "#6dba65", "btn_save_hover": "#5aa852",
+    "btn_add_bg": "#6dba65", "btn_add_hover": "#5aa852",
+    "btn_update_bg": "#5b8bd4", "btn_update_hover": "#4a7ac3",
+    "btn_delete_bg": "#d45b5b", "btn_delete_hover": "#c34a4a",
+    "status_unsaved": "#d4790a", "status_saved": "#2e8b2e", "status_error": "#c34a4a",
+    "help_bg": "#ede8f5", "help_text": "#5c5470", "help_border": "#c8bfe0",
+    "muted_text": "#8580a0", "accent_text": "#5b8bd4",
+    "gridline": "#d5d0e0", "frame_color": "#c8bfe0",
+    "tag_bg": "#e0d8f0", "tag_text": "#3d3555"
+}
+
+def _load_theme(theme_name: str) -> dict:
+    theme_path = SCRIPT_DIR / 'config' / 'themes' / f'{theme_name}.json'
+    if theme_path.exists():
+        try:
+            with open(theme_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            colors = _deep_merge(_DEFAULT_LIGHT_COLORS, data.get('colors', {}))
+            return colors
+        except Exception as e:
+            debug_print(f"Theme load error: {e}")
+    return _DEFAULT_LIGHT_COLORS.copy()
+
+def build_stylesheet(c: dict) -> str:
+    """Build full application stylesheet from a theme colors dict."""
+    return f"""
+        QMainWindow {{ background-color: {c['bg_main']}; }}
+        QWidget {{ background-color: {c['bg_main']}; color: {c['text_primary']}; }}
+        QTabWidget::pane {{ border: 1px solid {c['border']}; background: {c['bg_main']}; }}
+        QTabBar::tab {{
+            background: {c['bg_tab']}; color: {c['text_tab']}; border: 1px solid {c['border']};
+            padding: 8px 16px; margin-right: 2px; border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+        }}
+        QTabBar::tab:selected {{ background: {c['bg_tab_selected']}; color: {c['text_primary']}; border-bottom-color: {c['bg_tab_selected']}; font-weight: bold; }}
+        QTabBar::tab:hover {{ background: {c['bg_tab_hover']}; }}
+        QGroupBox {{
+            font-weight: bold; border: 1px solid {c['border']}; border-radius: 6px;
+            margin-top: 10px; padding-top: 14px; color: {c['text_primary']};
+        }}
+        QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 6px; }}
+        QGroupBox::indicator {{ width: 13px; height: 13px; }}
+        QGroupBox::indicator:checked {{ image: none; border: 2px solid {c['groupbox_indicator_checked']}; border-radius: 3px; background: {c['groupbox_indicator_checked']}; }}
+        QGroupBox::indicator:unchecked {{ image: none; border: 2px solid {c['groupbox_indicator_border']}; border-radius: 3px; background: {c['groupbox_indicator_unchecked_bg']}; }}
+        QLineEdit, QTextEdit, QPlainTextEdit {{
+            background-color: {c['bg_input']}; border: 1px solid {c['border']}; border-radius: 4px;
+            padding: 4px 6px; color: {c['text_primary']}; selection-background-color: {c['selection_bg']};
+        }}
+        QLineEdit:focus, QTextEdit:focus {{ border-color: {c['border_focus']}; }}
+        QLineEdit:read-only {{ background-color: {c['bg_readonly']}; color: {c['text_muted']}; }}
+        QComboBox {{
+            background-color: {c['bg_input']}; border: 1px solid {c['border']}; border-radius: 4px;
+            padding: 4px 8px; color: {c['text_primary']};
+        }}
+        QComboBox::drop-down {{ border: none; width: 20px; }}
+        QComboBox::down-arrow {{ image: none; border-left: 4px solid transparent;
+            border-right: 4px solid transparent; border-top: 6px solid {c['text_muted']}; }}
+        QComboBox QAbstractItemView {{
+            background-color: {c['bg_input']}; border: 1px solid {c['border']}; color: {c['text_primary']};
+            selection-background-color: {c['selection_bg']};
+        }}
+        QSpinBox, QDoubleSpinBox {{
+            background-color: {c['bg_input']}; border: 1px solid {c['border']}; border-radius: 4px;
+            padding: 4px; color: {c['text_primary']};
+        }}
+        QPushButton {{
+            background-color: {c['btn_bg']}; color: {c['text_primary']}; border: 1px solid {c['btn_border']};
+            border-radius: 4px; padding: 6px 14px; font-weight: bold;
+        }}
+        QPushButton:hover {{ background-color: {c['btn_hover']}; }}
+        QPushButton:pressed {{ background-color: {c['btn_pressed']}; }}
+        QPushButton:disabled {{ background-color: {c['btn_disabled_bg']}; color: {c['btn_disabled_text']}; border-color: {c['btn_disabled_border']}; }}
+        QPushButton#btn-save {{ background-color: {c['btn_save_bg']}; color: #ffffff; }}
+        QPushButton#btn-save:hover {{ background-color: {c['btn_save_hover']}; }}
+        QPushButton#btn-add {{ background-color: {c['btn_add_bg']}; color: #ffffff; }}
+        QPushButton#btn-add:hover {{ background-color: {c['btn_add_hover']}; }}
+        QPushButton#btn-update {{ background-color: {c['btn_update_bg']}; color: #ffffff; }}
+        QPushButton#btn-update:hover {{ background-color: {c['btn_update_hover']}; }}
+        QPushButton#btn-delete {{ background-color: {c['btn_delete_bg']}; color: #ffffff; }}
+        QPushButton#btn-delete:hover {{ background-color: {c['btn_delete_hover']}; }}
+        QListWidget, QTreeWidget {{
+            background-color: {c['bg_widget']}; border: 1px solid {c['border']}; border-radius: 4px;
+            color: {c['text_primary']}; alternate-background-color: {c['bg_alt']};
+        }}
+        QListWidget::item:selected, QTreeWidget::item:selected {{ background-color: {c['selection_bg']}; color: {c['text_primary']}; }}
+        QListWidget::item:hover, QTreeWidget::item:hover {{ background-color: {c['bg_readonly']}; }}
+        QTableWidget {{
+            background-color: {c['bg_widget']}; border: 1px solid {c['border']}; border-radius: 4px;
+            color: {c['text_primary']}; alternate-background-color: {c['bg_alt']}; gridline-color: {c['gridline']};
+        }}
+        QTableWidget::item:selected {{ background-color: {c['selection_bg']}; color: {c['text_primary']}; }}
+        QTableWidget::item:hover {{ background-color: {c['bg_readonly']}; }}
+        QHeaderView::section {{
+            background-color: {c['bg_header']}; color: {c['text_secondary']}; border: 1px solid {c['border']};
+            padding: 4px; font-weight: bold;
+        }}
+        QScrollBar:vertical {{ background: {c['bg_scrollbar']}; width: 12px; border: none; }}
+        QScrollBar::handle:vertical {{ background: {c['bg_scrollbar_handle']}; border-radius: 6px; min-height: 20px; }}
+        QScrollBar::handle:vertical:hover {{ background: {c['bg_scrollbar_handle_hover']}; }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
+        QScrollBar:horizontal {{ background: {c['bg_scrollbar']}; height: 12px; border: none; }}
+        QScrollBar::handle:horizontal {{ background: {c['bg_scrollbar_handle']}; border-radius: 6px; min-width: 20px; }}
+        QScrollBar::handle:horizontal:hover {{ background: {c['bg_scrollbar_handle_hover']}; }}
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; }}
+        QSlider::groove:horizontal {{ height: 6px; background: {c['slider_groove']}; border-radius: 3px; }}
+        QSlider::handle:horizontal {{
+            width: 16px; height: 16px; margin: -5px 0;
+            background: {c['slider_handle']}; border-radius: 8px;
+        }}
+        QSlider::handle:horizontal:hover {{ background: {c['slider_handle_hover']}; }}
+        QCheckBox {{ spacing: 6px; }}
+        QCheckBox::indicator {{ width: 16px; height: 16px; border-radius: 3px; border: 2px solid {c['groupbox_indicator_border']}; }}
+        QCheckBox::indicator:checked {{ background: {c['checkbox_checked']}; border-color: {c['checkbox_checked']}; }}
+        QCheckBox::indicator:unchecked {{ background: {c['bg_widget']}; }}
+        QLabel {{ color: {c['text_secondary']}; }}
+        QScrollArea {{ border: none; }}
+        QFrame[frameShape="4"] {{ color: {c['frame_color']}; }}
+        QToolTip {{ background-color: {c['bg_tooltip']}; color: {c['text_primary']}; border: 1px solid {c['border']}; padding: 4px; }}
+        QRadioButton {{ color: {c['text_primary']}; spacing: 6px; }}
+        QRadioButton::indicator {{ width: 14px; height: 14px; border-radius: 7px; border: 2px solid {c['groupbox_indicator_border']}; }}
+        QRadioButton::indicator:checked {{ background: {c['checkbox_checked']}; border-color: {c['checkbox_checked']}; }}
+        QRadioButton::indicator:unchecked {{ background: {c['bg_widget']}; }}
+        QLabel#hint-label {{ color: {c['muted_text']}; font-size: 11px; padding: 2px; }}
+        QLabel#help-panel {{
+            background-color: {c['help_bg']}; color: {c['help_text']}; padding: 10px;
+            border: 1px solid {c['help_border']}; border-radius: 4px;
+        }}
+    """
+
+# Load app config now that helper functions are defined
+APP_CONFIG = _load_app_config()
+CURRENT_THEME_COLORS = _load_theme(APP_CONFIG.get('theme', 'light'))
+
 # Place in the "settings.json" directory
 homePath = os.getenv("HOMEPATH")
 if not homePath:
@@ -36,11 +228,16 @@ if not homePath:
         homePath = homePath[2:]
 
 settingsPath = None
-for base in [f"C:{homePath}\\LocalAppData", f"C:{homePath}\\AppData\\Local"]:
-    candidate = f"{base}\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState"
-    if os.path.isdir(candidate):
-        settingsPath = candidate
-        break
+# Check for user-configured path override first
+_path_override = APP_CONFIG.get('wt_path_override', '').strip()
+if _path_override and os.path.isdir(_path_override):
+    settingsPath = _path_override
+else:
+    for base in [f"C:{homePath}\\LocalAppData", f"C:{homePath}\\AppData\\Local"]:
+        candidate = f"{base}\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState"
+        if os.path.isdir(candidate):
+            settingsPath = candidate
+            break
 
 if not settingsPath:
     print("Error: Could not find Windows Terminal settings directory.")
@@ -66,9 +263,19 @@ except Exception as e:
 # Function to dump modifications to "settings.json" only when Save button is clicked
 def dumpJson():
     try:
-        # Create a backup before saving
-        backup_filename = f"{settingsPath}\\settings.json.bak_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        copyfile(f"{settingsPath}\\settings.json", backup_filename)
+        backup_cfg = APP_CONFIG.get('backup', {})
+        if backup_cfg.get('enabled', True):
+            backup_filename = f"{settingsPath}\\settings.json.bak_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            copyfile(f"{settingsPath}\\settings.json", backup_filename)
+            # Prune old backups beyond max_count
+            max_count = backup_cfg.get('max_count', 10)
+            import glob
+            bak_files = sorted(glob.glob(f"{settingsPath}\\settings.json.bak_*"))
+            while len(bak_files) > max_count:
+                try:
+                    os.remove(bak_files.pop(0))
+                except Exception:
+                    break
 
         # Strip internal UIDs before writing to disk
         clean_data = strip_uids(data_schemes)
@@ -123,11 +330,18 @@ stamp_uids(data_schemes.get('newTabMenu', []))
 COMMON_ACTIONS = [
     "copy", "paste", "find", "openSettings", "openNewTabDropdown", "newTab", "duplicateTab",
     "closeTab", "nextTab", "prevTab", "switchToTab", "splitPane", "closePane", "moveFocus",
-    "resizePane", "togglePaneZoom", "scrollUp", "scrollDown", "scrollUpPage", "scrollDownPage",
+    "resizePane", "swapPane", "movePane", "duplicatePane", "togglePaneZoom",
+    "toggleSplitOrientation", "toggleReadOnlyMode", "enableReadOnlyMode", "disableReadOnlyMode",
+    "scrollUp", "scrollDown", "scrollUpPage", "scrollDownPage",
     "adjustFontSize", "resetFontSize", "toggleFullscreen", "toggleFocusMode", "commandPalette",
     "quit", "closeWindow", "newWindow", "toggleAlwaysOnTop", "sendInput", "selectAll",
     "markMode", "switchSelectionEndpoint", "expandSelectionToWord", "clearBuffer", "exportBuffer"
 ]
+
+# Direction options for pane actions
+PANE_DIRECTIONS = ["down", "left", "right", "up", "previous", "previousInOrder", "nextInOrder", "first", "parent", "child"]
+RESIZE_DIRECTIONS = ["down", "left", "right", "up"]
+SWAP_DIRECTIONS = ["down", "left", "right", "up", "previous", "previousInOrder", "nextInOrder", "first"]
 
 # Built-in schemes available in Windows Terminal
 BUILTIN_SCHEMES = [
@@ -389,10 +603,12 @@ class Ui_MainWindow(object):
         self.ui_initialized = False
 
     def setupUi(self, MainWindow):
+        self._main_window = MainWindow
         MainWindow.setObjectName("Windows Terminal Settings")
-        MainWindow.resize(1400, 900)
+        cfg_win = APP_CONFIG.get('window', {})
+        MainWindow.resize(cfg_win.get('width', 1400), cfg_win.get('height', 900))
         MainWindow.setWindowTitle("Windows Terminal Manager")
-        MainWindow.setMinimumSize(1200, 700)
+        MainWindow.setMinimumSize(cfg_win.get('min_width', 1200), cfg_win.get('min_height', 700))
 
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         MainWindow.setCentralWidget(self.centralwidget)
@@ -411,22 +627,25 @@ class Ui_MainWindow(object):
         self.actionsTab = QtWidgets.QWidget()
         self.commandBuilderTab = QtWidgets.QWidget()
         self.foldersTab = QtWidgets.QWidget()
+        self.settingsTab = QtWidgets.QWidget()
 
         self.tabWidget.addTab(self.profilesTab, "  Profiles")
         self.tabWidget.addTab(self.foldersTab, "  Folders && New Tab Menu")
         self.tabWidget.addTab(self.actionsTab, "  Actions && Key Bindings")
         self.tabWidget.addTab(self.commandBuilderTab, "  WT Command Builder")
+        self.tabWidget.addTab(self.settingsTab, "  Settings")
 
-        # Set tab icons using Unicode characters via styled labels
         self.tabWidget.setTabToolTip(0, "Manage terminal profiles")
         self.tabWidget.setTabToolTip(1, "Organize the new tab dropdown menu")
         self.tabWidget.setTabToolTip(2, "Configure keyboard shortcuts and actions")
         self.tabWidget.setTabToolTip(3, "Build complex wt.exe commands")
+        self.tabWidget.setTabToolTip(4, "Application and Windows Terminal global settings")
 
         self.setupProfilesTab()
         self.setupActionsTab()
         self.setupCommandBuilderTab()
         self.setupFoldersTab()
+        self.setupSettingsTab()
 
         # Bottom panel with status
         bottom_layout = QtWidgets.QHBoxLayout()
@@ -451,8 +670,9 @@ class Ui_MainWindow(object):
 
         # Left side - Profile list and controls
         left_widget = QtWidgets.QWidget()
-        left_widget.setMinimumWidth(250)
-        left_widget.setMaximumWidth(300)
+        _pp = APP_CONFIG.get('profiles_panel', {})
+        left_widget.setMinimumWidth(_pp.get('min_width', 250))
+        left_widget.setMaximumWidth(_pp.get('max_width', 300))
         left_layout = QtWidgets.QVBoxLayout(left_widget)
 
         # Profile list
@@ -462,6 +682,10 @@ class Ui_MainWindow(object):
 
         self.listWidget = QtWidgets.QListWidget()
         self.listWidget.setMinimumHeight(400)
+        # Special "Defaults" entry at the top
+        defaults_item = QtWidgets.QListWidgetItem("⚙ Defaults (all profiles)")
+        defaults_item.setToolTip("Edit default settings applied to all profiles (profiles.defaults)")
+        self.listWidget.addItem(defaults_item)
         for item in profiles_list:
             self.listWidget.addItem(item)
         self.updateProfileMenuIndicators()
@@ -493,11 +717,14 @@ class Ui_MainWindow(object):
 
         self.newProfileButton = QtWidgets.QPushButton("New Profile")
         self.duplicateProfileButton = QtWidgets.QPushButton("Duplicate Profile")
+        self.templateProfileButton = QtWidgets.QPushButton("From Template...")
         self.deleteProfileButton = QtWidgets.QPushButton("Delete Profile")
+        self.deleteProfileButton.setObjectName("btn-delete")
 
         profile_mgmt_layout.addWidget(self.newProfileButton, 0, 0)
         profile_mgmt_layout.addWidget(self.duplicateProfileButton, 0, 1)
-        profile_mgmt_layout.addWidget(self.deleteProfileButton, 1, 0, 1, 2)
+        profile_mgmt_layout.addWidget(self.templateProfileButton, 1, 0, 1, 2)
+        profile_mgmt_layout.addWidget(self.deleteProfileButton, 2, 0, 1, 2)
 
         left_layout.addLayout(profile_mgmt_layout)
 
@@ -509,9 +736,9 @@ class Ui_MainWindow(object):
 
         # Save button - prominent in left panel
         self.saveButton = QtWidgets.QPushButton("Save")
+        self.saveButton.setObjectName("btn-save")
         self.saveButton.setMinimumSize(120, 40)
         self.saveButton.setMaximumSize(300, 40)
-        self.saveButton.setStyleSheet("QPushButton { background-color: #6dba65; color: #ffffff; font-weight: bold; } QPushButton:hover { background-color: #5aa852; }")
         self.saveButton.clicked.connect(self.dumpOnSave)
         left_layout.addWidget(self.saveButton)
 
@@ -606,7 +833,7 @@ class Ui_MainWindow(object):
         self.fontSize = QtWidgets.QSpinBox()
         self.fontSize.setMinimum(4)
         self.fontSize.setMaximum(72)
-        self.fontSize.setValue(12)
+        self.fontSize.setValue(APP_CONFIG.get('defaults', {}).get('font_size', 12))
         self.fontWeightBox = QtWidgets.QComboBox()
         self.fontWeightBox.addItems(["normal", "thin", "extra-light", "light", "semi-light",
                                      "medium", "semi-bold", "bold", "extra-bold", "black"])
@@ -659,6 +886,18 @@ class Ui_MainWindow(object):
         self.intenseTextBox.addItems(["all", "bold", "bright", "none"])
         appearance_layout.addRow("Intense Text:", self.intenseTextBox)
 
+        # Pixel shader path
+        shader_layout = QtWidgets.QHBoxLayout()
+        self.pixelShaderEdit = QtWidgets.QLineEdit()
+        self.pixelShaderEdit.setPlaceholderText("Path to .hlsl shader file (optional)")
+        self.pixelShaderEdit.setToolTip("experimental.pixelShaderPath: Apply a custom HLSL pixel shader to this profile")
+        shader_browse_btn = QtWidgets.QPushButton("Browse...")
+        shader_browse_btn.setMaximumWidth(90)
+        shader_browse_btn.clicked.connect(self._browsePixelShader)
+        shader_layout.addWidget(self.pixelShaderEdit)
+        shader_layout.addWidget(shader_browse_btn)
+        appearance_layout.addRow("Pixel Shader:", shader_layout)
+
         scroll_main.addWidget(appearance_group)
 
         # ── Background Image Section ──
@@ -704,7 +943,7 @@ class Ui_MainWindow(object):
         self.historySizeSpinBox = QtWidgets.QSpinBox()
         self.historySizeSpinBox.setMinimum(0)
         self.historySizeSpinBox.setMaximum(32767)
-        self.historySizeSpinBox.setValue(9001)
+        self.historySizeSpinBox.setValue(APP_CONFIG.get('defaults', {}).get('history_size', 9001))
         advanced_layout.addRow("History Size:", self.historySizeSpinBox)
 
         self.closeOnExitBox = QtWidgets.QComboBox()
@@ -736,6 +975,34 @@ class Ui_MainWindow(object):
         adv_checks.addWidget(self.altGrCheckBox)
         adv_checks.addStretch()
         advanced_layout.addRow("", adv_checks)
+
+        # Environment Variables table
+        env_label = QtWidgets.QLabel("Environment Variables:")
+        advanced_layout.addRow(env_label)
+
+        self.envVarsTable = QtWidgets.QTableWidget()
+        self.envVarsTable.setColumnCount(2)
+        self.envVarsTable.setHorizontalHeaderLabels(["Variable Name", "Value"])
+        self.envVarsTable.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Interactive)
+        self.envVarsTable.horizontalHeader().setSectionsMovable(True)
+        self.envVarsTable.verticalHeader().setVisible(False)
+        self.envVarsTable.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
+        self.envVarsTable.setAlternatingRowColors(True)
+        self.envVarsTable.setMaximumHeight(150)
+        advanced_layout.addRow(self.envVarsTable)
+
+        env_btn_row = QtWidgets.QHBoxLayout()
+        self.addEnvVarButton = QtWidgets.QPushButton("Add Variable")
+        self.removeEnvVarButton = QtWidgets.QPushButton("Remove Selected")
+        self.removeEnvVarButton.setObjectName("btn-delete")
+        env_btn_row.addWidget(self.addEnvVarButton)
+        env_btn_row.addWidget(self.removeEnvVarButton)
+        env_btn_row.addStretch()
+        advanced_layout.addRow(env_btn_row)
+
+        self.addEnvVarButton.clicked.connect(self._addEnvVar)
+        self.removeEnvVarButton.clicked.connect(self._removeEnvVar)
+        self.envVarsTable.itemChanged.connect(self._onEnvVarChanged)
 
         scroll_main.addWidget(advanced_group)
         scroll_main.addStretch()
@@ -781,20 +1048,22 @@ class Ui_MainWindow(object):
         self.antialiasingBox.textActivated.connect(self.changeAntialiasing)
         self.retroEffectCheckBox.stateChanged.connect(self.changeRetroEffect)
         self.altGrCheckBox.stateChanged.connect(self.changeAltGr)
+        self.pixelShaderEdit.textChanged.connect(self.changePixelShader)
         self.defaultButton.clicked.connect(self.changeDefault)
         self.moveUpButton.clicked.connect(self.moveProfileUp)
         self.moveDownButton.clicked.connect(self.moveProfileDown)
         self.renameButton.clicked.connect(self.renameProfile)
         self.newProfileButton.clicked.connect(self.createNewProfile)
         self.duplicateProfileButton.clicked.connect(self.duplicateProfile)
+        self.templateProfileButton.clicked.connect(self.createProfileFromTemplate)
         self.deleteProfileButton.clicked.connect(self.deleteProfile)
 
-        # Set initial selection
+        # Set initial selection (skip row 0 which is "Defaults")
         index_listWidget = self.listWidget.findItems(default_profile, QtCore.Qt.MatchFlag.MatchFixedString)
         if index_listWidget:
             self.listWidget.setCurrentRow(self.listWidget.row(index_listWidget[0]))
-        elif self.listWidget.count() > 0:
-            self.listWidget.setCurrentRow(0)
+        elif self.listWidget.count() > 1:
+            self.listWidget.setCurrentRow(1)
 
     def setupActionsTab(self):
         main_layout = QtWidgets.QVBoxLayout(self.actionsTab)
@@ -854,7 +1123,11 @@ class Ui_MainWindow(object):
             "Run Command (New Tab)",
             "Run Command (Split Pane)",
             "Send Text to Terminal",
-            "Built-in Action"
+            "Built-in Action",
+            "Pane: Move Focus",
+            "Pane: Resize",
+            "Pane: Swap",
+            "Pane: Move to Tab"
         ])
         editor_layout.addRow("Action Type:", self.actionTypeCombo)
 
@@ -955,6 +1228,50 @@ class Ui_MainWindow(object):
 
         self.actionStack.addWidget(builtin_page)  # Index 2: Built-in
 
+        # --- Page 3: Pane Move Focus ---
+        move_focus_page = QtWidgets.QWidget()
+        mf_layout = QtWidgets.QFormLayout(move_focus_page)
+        mf_layout.setSpacing(6)
+        mf_layout.setContentsMargins(0, 0, 0, 0)
+        self.moveFocusDirCombo = QtWidgets.QComboBox()
+        self.moveFocusDirCombo.addItems(PANE_DIRECTIONS)
+        self.moveFocusDirCombo.setToolTip("Direction to move focus between panes")
+        mf_layout.addRow("Direction:", self.moveFocusDirCombo)
+        self.actionStack.addWidget(move_focus_page)  # Index 3
+
+        # --- Page 4: Pane Resize ---
+        resize_page = QtWidgets.QWidget()
+        rp_layout = QtWidgets.QFormLayout(resize_page)
+        rp_layout.setSpacing(6)
+        rp_layout.setContentsMargins(0, 0, 0, 0)
+        self.resizePaneDirCombo = QtWidgets.QComboBox()
+        self.resizePaneDirCombo.addItems(RESIZE_DIRECTIONS)
+        self.resizePaneDirCombo.setToolTip("Direction to expand the pane")
+        rp_layout.addRow("Direction:", self.resizePaneDirCombo)
+        self.actionStack.addWidget(resize_page)  # Index 4
+
+        # --- Page 5: Pane Swap ---
+        swap_page = QtWidgets.QWidget()
+        sp_layout = QtWidgets.QFormLayout(swap_page)
+        sp_layout.setSpacing(6)
+        sp_layout.setContentsMargins(0, 0, 0, 0)
+        self.swapPaneDirCombo = QtWidgets.QComboBox()
+        self.swapPaneDirCombo.addItems(SWAP_DIRECTIONS)
+        self.swapPaneDirCombo.setToolTip("Direction to swap pane with")
+        sp_layout.addRow("Direction:", self.swapPaneDirCombo)
+        self.actionStack.addWidget(swap_page)  # Index 5
+
+        # --- Page 6: Pane Move to Tab ---
+        move_tab_page = QtWidgets.QWidget()
+        mt_layout = QtWidgets.QFormLayout(move_tab_page)
+        mt_layout.setSpacing(6)
+        mt_layout.setContentsMargins(0, 0, 0, 0)
+        self.movePaneIndexSpin = QtWidgets.QSpinBox()
+        self.movePaneIndexSpin.setRange(0, 8)
+        self.movePaneIndexSpin.setToolTip("Target tab index (0-8, zero-based)")
+        mt_layout.addRow("Tab Index (0-8):", self.movePaneIndexSpin)
+        self.actionStack.addWidget(move_tab_page)  # Index 6
+
         editor_layout.addRow(self.actionStack)
 
         # Connect action type combo to switch pages
@@ -986,11 +1303,11 @@ class Ui_MainWindow(object):
         # Buttons row
         btn_layout = QtWidgets.QHBoxLayout()
         self.addActionButton = QtWidgets.QPushButton("Add New")
-        self.addActionButton.setStyleSheet("QPushButton { background-color: #6dba65; color: #ffffff; } QPushButton:hover { background-color: #5aa852; }")
+        self.addActionButton.setObjectName("btn-add")
         self.updateActionButton = QtWidgets.QPushButton("Save Changes")
-        self.updateActionButton.setStyleSheet("QPushButton { background-color: #5b8bd4; color: #ffffff; } QPushButton:hover { background-color: #4a7ac3; }")
+        self.updateActionButton.setObjectName("btn-update")
         self.deleteActionButton = QtWidgets.QPushButton("Delete")
-        self.deleteActionButton.setStyleSheet("QPushButton { background-color: #d45b5b; color: #ffffff; } QPushButton:hover { background-color: #c34a4a; }")
+        self.deleteActionButton.setObjectName("btn-delete")
         self.moveActionUpButton = QtWidgets.QPushButton("Move Up")
         self.moveActionDownButton = QtWidgets.QPushButton("Move Down")
         self.clearFieldsButton = QtWidgets.QPushButton("Clear")
@@ -1008,7 +1325,7 @@ class Ui_MainWindow(object):
         help_label = QtWidgets.QLabel(
             "Modifiers: ctrl, shift, alt, win  |  Keys: enter, tab, space, esc, f1-f24, up/down/left/right  |  "
             "Example: ctrl+shift+t")
-        help_label.setStyleSheet("QLabel { color: #8580a0; font-size: 11px; padding: 2px; }")
+        help_label.setObjectName("hint-label")
         main_layout.addWidget(help_label)
 
         # Keep actionsListWidget as hidden proxy for compatibility with existing methods
@@ -1137,7 +1454,7 @@ class Ui_MainWindow(object):
         add_pane_v_btn.setToolTip("Add a split-pane -V step (split left/right)")
         remove_btn = QtWidgets.QPushButton("Remove Step")
         remove_btn.setToolTip("Remove the selected step")
-        remove_btn.setStyleSheet("QPushButton { background-color: #d45b5b; color: #ffffff; } QPushButton:hover { background-color: #c34a4a; }")
+        remove_btn.setObjectName("btn-delete")
         move_up_btn = QtWidgets.QPushButton("Up")
         move_up_btn.setToolTip("Move selected step up in order")
         move_down_btn = QtWidgets.QPushButton("Down")
@@ -1359,7 +1676,7 @@ class Ui_MainWindow(object):
         delete_layout = QtWidgets.QHBoxLayout()
         delete_layout.addStretch()
         self.deleteFolderButton = QtWidgets.QPushButton("Delete Item")
-        self.deleteFolderButton.setStyleSheet("QPushButton { background-color: #d45b5b; color: #ffffff; } QPushButton:hover { background-color: #c34a4a; }")
+        self.deleteFolderButton.setObjectName("btn-delete")
         delete_layout.addWidget(self.deleteFolderButton)
         delete_layout.addStretch()
         folder_buttons_layout.addLayout(delete_layout)
@@ -1446,7 +1763,7 @@ Tips:
 • Folders can contain profiles, separators, or other folders
 • Use separators to group related profiles visually""")
         help_label.setWordWrap(True)
-        help_label.setStyleSheet("QLabel { background-color: #ede8f5; color: #5c5470; padding: 10px; border: 1px solid #c8bfe0; border-radius: 4px; }")
+        help_label.setObjectName("help-panel")
 
         help_layout.addWidget(help_label)
         right_layout.addWidget(help_group)
@@ -1477,6 +1794,10 @@ Tips:
 
     def _setProfileField(self, key, value, sub_key=None):
         """Set a profile field value. If value is empty/None/False-ish, remove the key."""
+        if self.isDefaultsSelected():
+            # Write to profiles.defaults instead
+            self._setDefaultsField(key, value, sub_key)
+            return
         idx = self.getCurrentIndex()
         if idx < 0:
             return
@@ -1501,15 +1822,24 @@ Tips:
     def setUnsavedChanges(self):
         self.unsaved_changes = True
         self.statusLabel.setText("Unsaved changes - Click Save to apply")
-        self.statusLabel.setStyleSheet("QLabel { color: #fab387; font-weight: bold; }")
+        c = CURRENT_THEME_COLORS
+        self.statusLabel.setStyleSheet(f"QLabel {{ color: {c['status_unsaved']}; font-weight: bold; }}")
 
     def getCurrentIndex(self):
+        """Return index into profiles list. Row 0 is 'Defaults', so subtract 1."""
         if self.listWidget.currentItem():
+            row = self.listWidget.currentRow()
+            if row == 0:
+                return -1  # Defaults pseudo-profile
             currentProfile = self.listWidget.currentItem().text()
             for i, dic in enumerate(data_schemes.get('profiles', {}).get('list', [])):
                 if dic.get("name") == currentProfile:
                     return i
         return -1
+
+    def isDefaultsSelected(self):
+        """Return True when the '⚙ Defaults' pseudo-profile is selected."""
+        return self.listWidget.currentRow() == 0
 
     def changeDefault(self):
         currentProfile = self.listWidget.currentItem().text()
@@ -1736,8 +2066,18 @@ Tips:
         # altGrAliasing defaults to True, only write if False
         self._setProfileField('altGrAliasing', False if not val else None)
 
+    def changePixelShader(self, text):
+        if not self.ui_initialized:
+            return
+        self._setProfileField('experimental.pixelShaderPath', text.strip() if text.strip() else None)
+
     def changedProfile(self):
         if not self.ui_initialized:
+            return
+
+        # Handle Defaults pseudo-profile
+        if self.isDefaultsSelected():
+            self._loadDefaultsProfile()
             return
 
         currentProfileIndex = self.getCurrentIndex()
@@ -1869,25 +2209,32 @@ Tips:
         self.retroEffectCheckBox.setChecked(profile.get('experimental.retroTerminalEffect', False))
         self.altGrCheckBox.setChecked(profile.get('altGrAliasing', True))
 
+        # Pixel shader
+        self.pixelShaderEdit.setText(profile.get('experimental.pixelShaderPath', ''))
+
+        # Environment variables table
+        self._loadEnvVarsTable(profile.get('environment', {}))
+
         # Re-enable ui_initialized
         self.ui_initialized = True
 
     def moveProfileUp(self):
         currentRow = self.listWidget.currentRow()
-        if currentRow > 0:
+        if currentRow > 1:  # Can't move above Defaults (row 0)
             self.listWidget.insertItem(currentRow - 1, self.listWidget.takeItem(currentRow))
             self.listWidget.setCurrentRow(currentRow - 1)
             self.updateProfileOrder()
 
     def moveProfileDown(self):
         currentRow = self.listWidget.currentRow()
-        if currentRow < self.listWidget.count() - 1:
+        if currentRow >= 1 and currentRow < self.listWidget.count() - 1:
             self.listWidget.insertItem(currentRow + 1, self.listWidget.takeItem(currentRow))
             self.listWidget.setCurrentRow(currentRow + 1)
             self.updateProfileOrder()
 
     def updateProfileOrder(self):
-        new_order = [self.listWidget.item(i).text() for i in range(self.listWidget.count())]
+        # Row 0 is "Defaults", skip it
+        new_order = [self.listWidget.item(i).text() for i in range(1, self.listWidget.count())]
         profiles = data_schemes['profiles']['list']
         # Build name->list of profiles mapping to handle duplicate names
         name_to_profiles = {}
@@ -1904,14 +2251,17 @@ Tips:
         self.setUnsavedChanges()
 
     def renameProfile(self):
+        if self.isDefaultsSelected():
+            return
         currentRow = self.listWidget.currentRow()
-        if currentRow >= 0:
+        if currentRow >= 1:
             currentItem = self.listWidget.currentItem()
             newName, ok = QtWidgets.QInputDialog.getText(None, "Rename Profile", "New Name:",
                                                           QtWidgets.QLineEdit.EchoMode.Normal, currentItem.text())
             if ok and newName.strip():
+                profileIdx = currentRow - 1
                 currentItem.setText(newName.strip())
-                data_schemes['profiles']['list'][currentRow]['name'] = newName.strip()
+                data_schemes['profiles']['list'][profileIdx]['name'] = newName.strip()
                 self.profileNameEdit.setText(newName.strip())
                 self.setUnsavedChanges()
 
@@ -1976,16 +2326,20 @@ Tips:
         import uuid
         import copy
 
+        if self.isDefaultsSelected():
+            QtWidgets.QMessageBox.warning(None, "Cannot Duplicate", "Please select a specific profile to duplicate.")
+            return
         currentRow = self.listWidget.currentRow()
-        if currentRow < 0:
+        if currentRow < 1:
             QtWidgets.QMessageBox.warning(
                 None, "No Selection",
                 "Please select a profile to duplicate."
             )
             return
 
+        profileIdx = currentRow - 1
         # Get current profile
-        current_profile = data_schemes['profiles']['list'][currentRow]
+        current_profile = data_schemes['profiles']['list'][profileIdx]
         currentName = current_profile.get('name', 'Profile')
 
         # Ask for new name
@@ -2025,6 +2379,9 @@ Tips:
 
     def deleteProfile(self):
         """Delete the selected profile"""
+        if self.isDefaultsSelected():
+            QtWidgets.QMessageBox.warning(None, "Cannot Delete", "The Defaults entry cannot be deleted.")
+            return
         currentRow = self.listWidget.currentRow()
         if currentRow < 0:
             QtWidgets.QMessageBox.warning(
@@ -2033,7 +2390,8 @@ Tips:
             )
             return
 
-        current_profile = data_schemes['profiles']['list'][currentRow]
+        profileListRow = currentRow - 1  # Account for Defaults item at row 0
+        current_profile = data_schemes['profiles']['list'][profileListRow]
         currentName = current_profile.get('name', 'Profile')
         currentGuid = current_profile.get('guid', '')
 
@@ -2056,7 +2414,7 @@ Tips:
             return
 
         # Remove from data
-        del data_schemes['profiles']['list'][currentRow]
+        del data_schemes['profiles']['list'][profileListRow]
 
         # Remove from UI
         self.listWidget.takeItem(currentRow)
@@ -2095,7 +2453,7 @@ Tips:
                     id_to_keys['UNBOUND_KEYS'] = []
                 id_to_keys['UNBOUND_KEYS'].append(keys)
 
-        grey = QtGui.QColor('#9590a8')
+        grey = QtGui.QColor(CURRENT_THEME_COLORS.get('muted_text', '#9590a8'))
 
         # Display actions with their associated key bindings
         for i, action in enumerate(actions):
@@ -2248,6 +2606,28 @@ Tips:
                     else:
                         self.actSendText.setText(input_text)
                         self.actSendEnter.setChecked(False)
+
+                elif cmd_action == 'moveFocus':
+                    self.actionTypeCombo.setCurrentIndex(4)
+                    idx = self.moveFocusDirCombo.findText(command.get('direction', 'down'))
+                    if idx >= 0:
+                        self.moveFocusDirCombo.setCurrentIndex(idx)
+
+                elif cmd_action == 'resizePane':
+                    self.actionTypeCombo.setCurrentIndex(5)
+                    idx = self.resizePaneDirCombo.findText(command.get('direction', 'down'))
+                    if idx >= 0:
+                        self.resizePaneDirCombo.setCurrentIndex(idx)
+
+                elif cmd_action == 'swapPane':
+                    self.actionTypeCombo.setCurrentIndex(6)
+                    idx = self.swapPaneDirCombo.findText(command.get('direction', 'down'))
+                    if idx >= 0:
+                        self.swapPaneDirCombo.setCurrentIndex(idx)
+
+                elif cmd_action == 'movePane':
+                    self.actionTypeCombo.setCurrentIndex(7)
+                    self.movePaneIndexSpin.setValue(command.get('index', 0))
 
                 else:
                     # Other dict command - show as built-in with raw JSON
@@ -2464,11 +2844,17 @@ Tips:
             self.actionStack.setCurrentIndex(0)
             self.splitOptsWidget.setVisible(index == 1)
         elif index == 2:
-            # Send Text to Terminal
-            self.actionStack.setCurrentIndex(1)
-        else:
-            # Built-in Action
-            self.actionStack.setCurrentIndex(2)
+            self.actionStack.setCurrentIndex(1)  # Send Text
+        elif index == 3:
+            self.actionStack.setCurrentIndex(2)  # Built-in
+        elif index == 4:
+            self.actionStack.setCurrentIndex(3)  # Move Focus
+        elif index == 5:
+            self.actionStack.setCurrentIndex(4)  # Resize Pane
+        elif index == 6:
+            self.actionStack.setCurrentIndex(5)  # Swap Pane
+        elif index == 7:
+            self.actionStack.setCurrentIndex(6)  # Move to Tab
 
     def _browseActionScript(self):
         """Browse for a script or executable."""
@@ -2543,10 +2929,28 @@ Tips:
                 text += '\n'
             return {'action': 'sendInput', 'input': text}
 
-        else:
+        elif action_type == 3:
             # Built-in Action
             simple = self.commandActionCombo.currentText().strip()
             return simple if simple else None
+
+        elif action_type == 4:
+            # Pane: Move Focus
+            return {'action': 'moveFocus', 'direction': self.moveFocusDirCombo.currentText()}
+
+        elif action_type == 5:
+            # Pane: Resize
+            return {'action': 'resizePane', 'direction': self.resizePaneDirCombo.currentText()}
+
+        elif action_type == 6:
+            # Pane: Swap
+            return {'action': 'swapPane', 'direction': self.swapPaneDirCombo.currentText()}
+
+        elif action_type == 7:
+            # Pane: Move to Tab
+            return {'action': 'movePane', 'index': self.movePaneIndexSpin.value()}
+
+        return None
 
     def clearActionFields(self):
         """Helper method to clear all action input fields"""
@@ -2566,6 +2970,10 @@ Tips:
         self.actSplitH.setChecked(True)
         self.actSplitSize.setValue(0.5)
         self.splitOptsWidget.setVisible(False)
+        self.moveFocusDirCombo.setCurrentIndex(0)
+        self.resizePaneDirCombo.setCurrentIndex(0)
+        self.swapPaneDirCombo.setCurrentIndex(0)
+        self.movePaneIndexSpin.setValue(0)
 
     def recordShortcut(self):
         """Open key recorder dialog and populate the shortcut field."""
@@ -3095,7 +3503,7 @@ Tips:
             item = QtWidgets.QTreeWidgetItem(parent,
                 [f"Remaining Profiles ({count} auto-listed)", "📋 Auto"])
             item.setData(0, QtCore.Qt.ItemDataRole.UserRole, entry)
-            item.setForeground(0, QtGui.QBrush(QtGui.QColor("#8580a0")))
+            item.setForeground(0, QtGui.QBrush(QtGui.QColor(CURRENT_THEME_COLORS.get('muted_text', '#8580a0'))))
             item.setToolTip(0, "Profiles not explicitly in the menu. WT shows these automatically.")
 
             for profile in unassigned:
@@ -3105,7 +3513,7 @@ Tips:
                 # Store a marker so we know this is a virtual/auto entry
                 child_item.setData(0, QtCore.Qt.ItemDataRole.UserRole,
                     {'type': '_virtual_remaining', 'profile': guid})
-                child_item.setForeground(0, QtGui.QBrush(QtGui.QColor("#5b8bd4")))
+                child_item.setForeground(0, QtGui.QBrush(QtGui.QColor(CURRENT_THEME_COLORS.get('accent_text', '#5b8bd4'))))
                 child_item.setToolTip(0, f"GUID: {guid}\nRight-click or use 'Move Profile' to assign explicitly")
 
             # Auto-expand to show what's inside
@@ -3856,17 +4264,408 @@ Tips:
             self.foldersTreeWidget.setCurrentItem(item)
             self.foldersTreeWidget.scrollToItem(item)
 
+    # ========== Profile Defaults Methods ==========
+
+    def _loadDefaultsProfile(self):
+        """Load profiles.defaults into the editor fields."""
+        defaults = data_schemes.get('profiles', {}).get('defaults', {})
+        self.ui_initialized = False
+
+        self.profileNameEdit.setText("(Defaults — applied to all profiles)")
+
+        colorScheme = defaults.get('colorScheme', '')
+        index = self.comboBox.findText(colorScheme, QtCore.Qt.MatchFlag.MatchFixedString)
+        if index >= 0:
+            self.comboBox.setCurrentIndex(index)
+
+        font_obj = defaults.get('font', {})
+        fontFace = font_obj.get('face') if isinstance(font_obj, dict) else defaults.get('fontFace', '')
+        if fontFace:
+            idx = self.fontBox.findText(fontFace, QtCore.Qt.MatchFlag.MatchFixedString)
+            if idx >= 0:
+                self.fontBox.setCurrentIndex(idx)
+
+        fontSize = font_obj.get('size') if isinstance(font_obj, dict) else defaults.get('fontSize')
+        if fontSize:
+            self.fontSize.setValue(fontSize)
+
+        self.commandLineEdit.setText(defaults.get('commandline', ''))
+        self.startingDirectoryEdit.setText(defaults.get('startingDirectory', ''))
+        self.tabTitleEdit.setText(defaults.get('tabTitle', ''))
+        self.tabColorEdit.setText(defaults.get('tabColor', ''))
+        self.iconEdit.setText(defaults.get('icon', ''))
+        self.hiddenCheckBox.setChecked(defaults.get('hidden', False))
+        self.runAsAdminCheckBox.setChecked(defaults.get('elevate', False))
+        self.suppressTitleCheckBox.setChecked(defaults.get('suppressApplicationTitle', False))
+        self.cursorColorEdit.setText(defaults.get('cursorColor', ''))
+        self.foregroundEdit.setText(defaults.get('foreground', ''))
+        self.backgroundColorEdit.setText(defaults.get('background', ''))
+        self.selectionBackgroundEdit.setText(defaults.get('selectionBackground', ''))
+        self.opacitySlider.setValue(defaults.get('opacity', 100))
+        self.useAcrylicCheckBox.setChecked(defaults.get('useAcrylic', False))
+        self.backgroundImageEdit.setText(defaults.get('backgroundImage', ''))
+        self.historySizeSpinBox.setValue(defaults.get('historySize', APP_CONFIG.get('defaults', {}).get('history_size', 9001)))
+        self.snapOnInputCheckBox.setChecked(defaults.get('snapOnInput', True))
+        self.retroEffectCheckBox.setChecked(defaults.get('experimental.retroTerminalEffect', False))
+        self.altGrCheckBox.setChecked(defaults.get('altGrAliasing', True))
+        self.pixelShaderEdit.setText(defaults.get('experimental.pixelShaderPath', ''))
+        self._loadEnvVarsTable(defaults.get('environment', {}))
+
+        self.ui_initialized = True
+
+    def _setDefaultsField(self, key, value, sub_key=None):
+        """Set a field in profiles.defaults."""
+        if 'profiles' not in data_schemes:
+            data_schemes['profiles'] = {}
+        if 'defaults' not in data_schemes['profiles']:
+            data_schemes['profiles']['defaults'] = {}
+        defaults = data_schemes['profiles']['defaults']
+        if sub_key:
+            if value:
+                if key not in defaults:
+                    defaults[key] = {}
+                defaults[key][sub_key] = value
+            else:
+                if key in defaults and sub_key in defaults[key]:
+                    del defaults[key][sub_key]
+                    if not defaults[key]:
+                        del defaults[key]
+        else:
+            if value is not None and value != '':
+                defaults[key] = value
+            else:
+                defaults.pop(key, None)
+        self.setUnsavedChanges()
+
+    # ========== Environment Variables Methods ==========
+
+    def _loadEnvVarsTable(self, env_dict: dict):
+        """Populate the environment variables table from a dict."""
+        self.envVarsTable.blockSignals(True)
+        self.envVarsTable.setRowCount(0)
+        for name, value in (env_dict or {}).items():
+            row = self.envVarsTable.rowCount()
+            self.envVarsTable.insertRow(row)
+            self.envVarsTable.setItem(row, 0, QtWidgets.QTableWidgetItem(str(name)))
+            self.envVarsTable.setItem(row, 1, QtWidgets.QTableWidgetItem(str(value)))
+        self.envVarsTable.blockSignals(False)
+
+    def _addEnvVar(self):
+        row = self.envVarsTable.rowCount()
+        self.envVarsTable.insertRow(row)
+        self.envVarsTable.setItem(row, 0, QtWidgets.QTableWidgetItem("VARIABLE_NAME"))
+        self.envVarsTable.setItem(row, 1, QtWidgets.QTableWidgetItem("value"))
+        self.envVarsTable.editItem(self.envVarsTable.item(row, 0))
+        self._saveEnvVarsToProfile()
+
+    def _removeEnvVar(self):
+        row = self.envVarsTable.currentRow()
+        if row >= 0:
+            self.envVarsTable.removeRow(row)
+            self._saveEnvVarsToProfile()
+
+    def _onEnvVarChanged(self, item):
+        if self.ui_initialized:
+            self._saveEnvVarsToProfile()
+
+    def _saveEnvVarsToProfile(self):
+        """Read table and save environment dict to current profile or defaults."""
+        env = {}
+        for row in range(self.envVarsTable.rowCount()):
+            name_item = self.envVarsTable.item(row, 0)
+            val_item = self.envVarsTable.item(row, 1)
+            if name_item and name_item.text().strip():
+                env[name_item.text().strip()] = val_item.text() if val_item else ''
+        if self.isDefaultsSelected():
+            self._setDefaultsField('environment', env if env else None)
+        else:
+            idx = self.getCurrentIndex()
+            if idx >= 0:
+                if env:
+                    data_schemes['profiles']['list'][idx]['environment'] = env
+                else:
+                    data_schemes['profiles']['list'][idx].pop('environment', None)
+                self.setUnsavedChanges()
+
+    # ========== Pixel Shader Method ==========
+
+    def _browsePixelShader(self):
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            None, "Select Pixel Shader", "", "HLSL Shader Files (*.hlsl);;All Files (*)")
+        if path:
+            self.pixelShaderEdit.setText(path.replace('/', '\\'))
+
+    # ========== Profile Template Method ==========
+
+    _PROFILE_TEMPLATES = [
+        {"name": "Git Bash", "commandline": r'"%PROGRAMFILES%\Git\bin\bash.exe" --login -i',
+         "icon": r"%PROGRAMFILES%\Git\mingw64\share\git\git-for-windows.ico",
+         "startingDirectory": "%USERPROFILE%"},
+        {"name": "Anaconda Prompt", "commandline": r'cmd.exe /k "%USERPROFILE%\Anaconda3\Scripts\activate.bat"',
+         "icon": r"%USERPROFILE%\Anaconda3\Menu\anaconda-navigator.ico",
+         "startingDirectory": "%USERPROFILE%"},
+        {"name": "cmder", "commandline": r'"%CMDER_ROOT%\vendor\git-for-windows\bin\bash.exe" --login -i',
+         "icon": r"%CMDER_ROOT%\icons\cmder.ico",
+         "startingDirectory": "%USERPROFILE%"},
+        {"name": "MSYS2 / MinGW64", "commandline": r"C:\msys64\mingw64.exe",
+         "icon": r"C:\msys64\mingw64\share\pixmaps\msys2.ico",
+         "startingDirectory": r"C:\msys64\home\%USERNAME%"},
+        {"name": "Cygwin", "commandline": r"C:\cygwin64\bin\bash.exe --login -i",
+         "icon": r"C:\cygwin64\Cygwin-Terminal.ico",
+         "startingDirectory": r"C:\cygwin64\home\%USERNAME%"},
+        {"name": "PowerShell 7 (Admin)", "commandline": r"pwsh.exe -NoExit -Command Start-Process pwsh -Verb RunAs",
+         "icon": "ms-appx:///ProfileIcons/{574e775e-4f2a-5b96-ac1e-a2962a402336}.png"},
+        {"name": "SSH Remote", "commandline": r"ssh.exe user@hostname",
+         "icon": "ms-appx:///ProfileIcons/{0caa0dad-35be-5f56-a8ff-afceeeaa6101}.png",
+         "startingDirectory": "%USERPROFILE%"},
+    ]
+
+    def createProfileFromTemplate(self):
+        """Create a new profile from a predefined template."""
+        import copy
+        template_names = [t['name'] for t in self._PROFILE_TEMPLATES]
+        chosen, ok = QtWidgets.QInputDialog.getItem(
+            None, "Profile from Template", "Select a template:", template_names, 0, False)
+        if not ok:
+            return
+        template = next((t for t in self._PROFILE_TEMPLATES if t['name'] == chosen), None)
+        if not template:
+            return
+        new_name, ok2 = QtWidgets.QInputDialog.getText(
+            None, "Profile Name", "Enter name for new profile:",
+            QtWidgets.QLineEdit.EchoMode.Normal, chosen)
+        if not ok2 or not new_name.strip():
+            return
+        new_profile = copy.deepcopy(template)
+        new_profile['name'] = new_name.strip()
+        new_profile['guid'] = '{' + str(_uuid.uuid4()) + '}'
+        new_profile['hidden'] = False
+        if 'profiles' not in data_schemes:
+            data_schemes['profiles'] = {'list': []}
+        data_schemes['profiles']['list'].append(new_profile)
+        self.listWidget.addItem(new_name.strip())
+        self.listWidget.setCurrentRow(self.listWidget.count() - 1)
+        global profiles_list
+        profiles_list.append(new_name.strip())
+        self.setUnsavedChanges()
+        QtWidgets.QMessageBox.information(None, "Profile Created",
+            f"Profile '{new_name.strip()}' created from template '{chosen}'.\n"
+            "Edit the Command Line to point to the correct path on your system.")
+
+    # ========== Settings Tab Methods ==========
+
+    def setupSettingsTab(self):
+        """Setup the Settings tab for app config and global WT settings."""
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        outer = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(outer)
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        tab_layout = QtWidgets.QVBoxLayout(self.settingsTab)
+        tab_layout.setContentsMargins(0, 0, 0, 0)
+        tab_layout.addWidget(scroll)
+        scroll.setWidget(outer)
+
+        # ── Appearance ────────────────────────────────────────────────
+        appear_group = QtWidgets.QGroupBox("Application Appearance")
+        appear_form = QtWidgets.QFormLayout(appear_group)
+        appear_form.setSpacing(8)
+
+        theme_row = QtWidgets.QHBoxLayout()
+        self.themeLight = QtWidgets.QRadioButton("Light")
+        self.themeDark = QtWidgets.QRadioButton("Dark")
+        current_theme = APP_CONFIG.get('theme', 'light')
+        self.themeLight.setChecked(current_theme == 'light')
+        self.themeDark.setChecked(current_theme == 'dark')
+        theme_row.addWidget(self.themeLight)
+        theme_row.addWidget(self.themeDark)
+        theme_row.addStretch()
+        appear_form.addRow("Theme:", theme_row)
+
+        self.themeLight.toggled.connect(self._onThemeToggled)
+        layout.addWidget(appear_group)
+
+        # ── Window ────────────────────────────────────────────────────
+        window_group = QtWidgets.QGroupBox("Window Geometry")
+        window_form = QtWidgets.QFormLayout(window_group)
+        window_form.setSpacing(8)
+
+        win_cfg = APP_CONFIG.get('window', {})
+        size_row = QtWidgets.QHBoxLayout()
+        self.settWinWidth = QtWidgets.QSpinBox()
+        self.settWinWidth.setRange(800, 7680)
+        self.settWinWidth.setValue(win_cfg.get('width', 1400))
+        self.settWinHeight = QtWidgets.QSpinBox()
+        self.settWinHeight.setRange(600, 4320)
+        self.settWinHeight.setValue(win_cfg.get('height', 900))
+        size_row.addWidget(QtWidgets.QLabel("W:"))
+        size_row.addWidget(self.settWinWidth)
+        size_row.addWidget(QtWidgets.QLabel("  H:"))
+        size_row.addWidget(self.settWinHeight)
+        size_row.addStretch()
+        window_form.addRow("Default Size:", size_row)
+        layout.addWidget(window_group)
+
+        # ── Backup ────────────────────────────────────────────────────
+        backup_group = QtWidgets.QGroupBox("settings.json Backup")
+        backup_form = QtWidgets.QFormLayout(backup_group)
+        backup_form.setSpacing(8)
+
+        backup_cfg = APP_CONFIG.get('backup', {})
+        self.settBackupEnabled = QtWidgets.QCheckBox("Create backup before each save")
+        self.settBackupEnabled.setChecked(backup_cfg.get('enabled', True))
+        backup_form.addRow(self.settBackupEnabled)
+
+        self.settBackupMaxCount = QtWidgets.QSpinBox()
+        self.settBackupMaxCount.setRange(1, 100)
+        self.settBackupMaxCount.setValue(backup_cfg.get('max_count', 10))
+        self.settBackupMaxCount.setToolTip("Older backups beyond this count are deleted automatically")
+        backup_form.addRow("Max backups to keep:", self.settBackupMaxCount)
+        layout.addWidget(backup_group)
+
+        # ── WT Settings Path ──────────────────────────────────────────
+        path_group = QtWidgets.QGroupBox("Windows Terminal Settings Path")
+        path_form = QtWidgets.QFormLayout(path_group)
+        path_form.setSpacing(8)
+
+        detected_label = QtWidgets.QLabel(settingsPath or "Not found")
+        detected_label.setWordWrap(True)
+        path_form.addRow("Auto-detected:", detected_label)
+
+        override_row = QtWidgets.QHBoxLayout()
+        self.settPathOverride = QtWidgets.QLineEdit()
+        self.settPathOverride.setPlaceholderText("Leave empty to use auto-detected path")
+        self.settPathOverride.setText(APP_CONFIG.get('wt_path_override', ''))
+        override_browse = QtWidgets.QPushButton("Browse...")
+        override_browse.setMaximumWidth(90)
+        override_browse.clicked.connect(self._browseWtPath)
+        override_row.addWidget(self.settPathOverride)
+        override_row.addWidget(override_browse)
+        path_form.addRow("Override Path:", override_row)
+        layout.addWidget(path_group)
+
+        # ── Global Windows Terminal Settings ──────────────────────────
+        wt_group = QtWidgets.QGroupBox("Global Windows Terminal Settings")
+        wt_form = QtWidgets.QFormLayout(wt_group)
+        wt_form.setSpacing(8)
+
+        wt_note = QtWidgets.QLabel(
+            "These settings are written directly to settings.json when you click 'Apply & Save'.")
+        wt_note.setWordWrap(True)
+        wt_note.setObjectName("hint-label")
+        wt_form.addRow(wt_note)
+
+        self.settCopyOnSelect = QtWidgets.QCheckBox("Copy selected text to clipboard automatically")
+        self.settCopyOnSelect.setChecked(bool(data_schemes.get('copyOnSelect', False)))
+        wt_form.addRow("Copy on Select:", self.settCopyOnSelect)
+
+        self.settGlobalHistorySize = QtWidgets.QSpinBox()
+        self.settGlobalHistorySize.setRange(0, 32767)
+        self.settGlobalHistorySize.setValue(int(data_schemes.get('historySize', 9000)))
+        self.settGlobalHistorySize.setToolTip("Default history size for all profiles (can be overridden per profile)")
+        wt_form.addRow("Default History Size:", self.settGlobalHistorySize)
+
+        wt_form.addRow(QtWidgets.QLabel("Disabled Profile Sources (prevents auto-generation):"))
+
+        disabled_sources = data_schemes.get('disabledProfileSources', [])
+        self.settDisableWsl = QtWidgets.QCheckBox("WSL (Windows.Terminal.Wsl)")
+        self.settDisablePwsh = QtWidgets.QCheckBox("PowerShell Core (Windows.Terminal.PowershellCore)")
+        self.settDisableAzure = QtWidgets.QCheckBox("Azure (Windows.Terminal.Azure)")
+        self.settDisableSsh = QtWidgets.QCheckBox("SSH (Windows.Terminal.SSH)")
+        self.settDisableWsl.setChecked("Windows.Terminal.Wsl" in disabled_sources)
+        self.settDisablePwsh.setChecked("Windows.Terminal.PowershellCore" in disabled_sources)
+        self.settDisableAzure.setChecked("Windows.Terminal.Azure" in disabled_sources)
+        self.settDisableSsh.setChecked("Windows.Terminal.SSH" in disabled_sources)
+        wt_form.addRow(self.settDisableWsl)
+        wt_form.addRow(self.settDisablePwsh)
+        wt_form.addRow(self.settDisableAzure)
+        wt_form.addRow(self.settDisableSsh)
+        layout.addWidget(wt_group)
+
+        # ── Save button ───────────────────────────────────────────────
+        save_btn = QtWidgets.QPushButton("Apply && Save Settings")
+        save_btn.setObjectName("btn-save")
+        save_btn.setMinimumHeight(40)
+        save_btn.clicked.connect(self._saveSettings)
+        layout.addWidget(save_btn)
+
+        layout.addStretch()
+
+    def _onThemeToggled(self, checked):
+        if not checked:
+            return
+        global CURRENT_THEME_COLORS, APP_CONFIG
+        theme_name = 'light' if self.themeLight.isChecked() else 'dark'
+        APP_CONFIG['theme'] = theme_name
+        CURRENT_THEME_COLORS = _load_theme(theme_name)
+        QtWidgets.QApplication.instance().setStyleSheet(build_stylesheet(CURRENT_THEME_COLORS))
+
+    def _browseWtPath(self):
+        path = QtWidgets.QFileDialog.getExistingDirectory(None, "Select Windows Terminal Settings Directory")
+        if path:
+            self.settPathOverride.setText(path.replace('/', '\\'))
+
+    def _saveSettings(self):
+        """Save app config and write global WT settings to data_schemes."""
+        global APP_CONFIG
+        # Update app config
+        APP_CONFIG['theme'] = 'light' if self.themeLight.isChecked() else 'dark'
+        APP_CONFIG['window']['width'] = self.settWinWidth.value()
+        APP_CONFIG['window']['height'] = self.settWinHeight.value()
+        APP_CONFIG['backup']['enabled'] = self.settBackupEnabled.isChecked()
+        APP_CONFIG['backup']['max_count'] = self.settBackupMaxCount.value()
+        APP_CONFIG['wt_path_override'] = self.settPathOverride.text().strip()
+
+        # Write global WT settings to data_schemes
+        if self.settCopyOnSelect.isChecked():
+            data_schemes['copyOnSelect'] = True
+        else:
+            data_schemes.pop('copyOnSelect', None)
+
+        hist = self.settGlobalHistorySize.value()
+        if hist != 9000:
+            data_schemes['historySize'] = hist
+        else:
+            data_schemes.pop('historySize', None)
+
+        # Build disabledProfileSources list
+        disabled = []
+        if self.settDisableWsl.isChecked():
+            disabled.append("Windows.Terminal.Wsl")
+        if self.settDisablePwsh.isChecked():
+            disabled.append("Windows.Terminal.PowershellCore")
+        if self.settDisableAzure.isChecked():
+            disabled.append("Windows.Terminal.Azure")
+        if self.settDisableSsh.isChecked():
+            disabled.append("Windows.Terminal.SSH")
+        if disabled:
+            data_schemes['disabledProfileSources'] = disabled
+        else:
+            data_schemes.pop('disabledProfileSources', None)
+
+        # Save app config file
+        if _save_app_config(APP_CONFIG):
+            QtWidgets.QMessageBox.information(None, "Settings Saved",
+                "Application settings saved.\n\n"
+                "Click the main 'Save' button (Profiles tab) to write WT global settings to settings.json.")
+        else:
+            QtWidgets.QMessageBox.warning(None, "Save Failed",
+                "Could not save application settings to config/settings.json.")
+
     # ========== Save Method ==========
 
     def dumpOnSave(self):
+        c = CURRENT_THEME_COLORS
         if dumpJson():
             self.unsaved_changes = False
             self.statusLabel.setText("Settings saved successfully!")
-            self.statusLabel.setStyleSheet("QLabel { color: #2e8b2e; font-weight: bold; }")
+            self.statusLabel.setStyleSheet(f"QLabel {{ color: {c['status_saved']}; font-weight: bold; }}")
             QtCore.QTimer.singleShot(3000, lambda: self.statusLabel.setText(""))
         else:
             self.statusLabel.setText("Error saving settings!")
-            self.statusLabel.setStyleSheet("QLabel { color: #c34a4a; font-weight: bold; }")
+            self.statusLabel.setStyleSheet(f"QLabel {{ color: {c['status_error']}; font-weight: bold; }}")
 
 
 if __name__ == "__main__":
@@ -3874,99 +4673,8 @@ if __name__ == "__main__":
     MainWindow = QtWidgets.QMainWindow()
     app.setStyle('Fusion')
 
-    # Global stylesheet - pastel light theme
-    app.setStyleSheet("""
-        QMainWindow { background-color: #f5f0ff; }
-        QWidget { background-color: #f5f0ff; color: #2d2d3d; }
-        QTabWidget::pane { border: 1px solid #c8bfe0; background: #f5f0ff; }
-        QTabBar::tab {
-            background: #e8e0f5; color: #3d3555; border: 1px solid #c8bfe0;
-            padding: 8px 16px; margin-right: 2px; border-top-left-radius: 4px;
-            border-top-right-radius: 4px;
-        }
-        QTabBar::tab:selected { background: #f5f0ff; color: #2d2d3d; border-bottom-color: #f5f0ff; font-weight: bold; }
-        QTabBar::tab:hover { background: #ded5f0; }
-        QGroupBox {
-            font-weight: bold; border: 1px solid #c8bfe0; border-radius: 6px;
-            margin-top: 10px; padding-top: 14px; color: #2d2d3d;
-        }
-        QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 6px; }
-        QGroupBox::indicator { width: 13px; height: 13px; }
-        QGroupBox::indicator:checked { image: none; border: 2px solid #7c6bc4; border-radius: 3px; background: #7c6bc4; }
-        QGroupBox::indicator:unchecked { image: none; border: 2px solid #b0a8c8; border-radius: 3px; background: #e8e0f5; }
-        QLineEdit, QTextEdit, QPlainTextEdit {
-            background-color: #ffffff; border: 1px solid #c8bfe0; border-radius: 4px;
-            padding: 4px 6px; color: #2d2d3d; selection-background-color: #d4cceb;
-        }
-        QLineEdit:focus, QTextEdit:focus { border-color: #7c6bc4; }
-        QLineEdit:read-only { background-color: #ede8f5; color: #6b6580; }
-        QComboBox {
-            background-color: #ffffff; border: 1px solid #c8bfe0; border-radius: 4px;
-            padding: 4px 8px; color: #2d2d3d;
-        }
-        QComboBox::drop-down { border: none; width: 20px; }
-        QComboBox::down-arrow { image: none; border-left: 4px solid transparent;
-            border-right: 4px solid transparent; border-top: 6px solid #5c5470; }
-        QComboBox QAbstractItemView {
-            background-color: #ffffff; border: 1px solid #c8bfe0; color: #2d2d3d;
-            selection-background-color: #d4cceb;
-        }
-        QSpinBox, QDoubleSpinBox {
-            background-color: #ffffff; border: 1px solid #c8bfe0; border-radius: 4px;
-            padding: 4px; color: #2d2d3d;
-        }
-        QPushButton {
-            background-color: #e0d8f0; color: #2d2d3d; border: 1px solid #b0a8c8;
-            border-radius: 4px; padding: 6px 14px; font-weight: bold;
-        }
-        QPushButton:hover { background-color: #d0c5e8; }
-        QPushButton:pressed { background-color: #c0b5d8; }
-        QPushButton:disabled { background-color: #ede8f5; color: #a09ab0; border-color: #d5d0e0; }
-        QListWidget, QTreeWidget {
-            background-color: #ffffff; border: 1px solid #c8bfe0; border-radius: 4px;
-            color: #2d2d3d; alternate-background-color: #f5f0ff;
-        }
-        QListWidget::item:selected, QTreeWidget::item:selected { background-color: #d4cceb; }
-        QListWidget::item:hover, QTreeWidget::item:hover { background-color: #ede8f5; }
-        QTableWidget {
-            background-color: #ffffff; border: 1px solid #c8bfe0; border-radius: 4px;
-            color: #2d2d3d; alternate-background-color: #f5f0ff; gridline-color: #d5d0e0;
-        }
-        QTableWidget::item:selected { background-color: #d4cceb; color: #2d2d3d; }
-        QTableWidget::item:hover { background-color: #ede8f5; }
-        QHeaderView::section {
-            background-color: #e8e0f5; color: #3d3555; border: 1px solid #c8bfe0;
-            padding: 4px; font-weight: bold;
-        }
-        QScrollBar:vertical {
-            background: #f0eaf8; width: 12px; border: none;
-        }
-        QScrollBar::handle:vertical { background: #c8bfe0; border-radius: 6px; min-height: 20px; }
-        QScrollBar::handle:vertical:hover { background: #b0a8c8; }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
-        QScrollBar:horizontal {
-            background: #f0eaf8; height: 12px; border: none;
-        }
-        QScrollBar::handle:horizontal { background: #c8bfe0; border-radius: 6px; min-width: 20px; }
-        QScrollBar::handle:horizontal:hover { background: #b0a8c8; }
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }
-        QSlider::groove:horizontal {
-            height: 6px; background: #d5d0e0; border-radius: 3px;
-        }
-        QSlider::handle:horizontal {
-            width: 16px; height: 16px; margin: -5px 0;
-            background: #7c6bc4; border-radius: 8px;
-        }
-        QSlider::handle:horizontal:hover { background: #9585d0; }
-        QCheckBox { spacing: 6px; }
-        QCheckBox::indicator { width: 16px; height: 16px; border-radius: 3px; border: 2px solid #b0a8c8; }
-        QCheckBox::indicator:checked { background: #7c6bc4; border-color: #7c6bc4; }
-        QCheckBox::indicator:unchecked { background: #ffffff; }
-        QLabel { color: #3d3555; }
-        QScrollArea { border: none; }
-        QFrame[frameShape="4"] { color: #c8bfe0; }
-        QToolTip { background-color: #ffffff; color: #2d2d3d; border: 1px solid #c8bfe0; padding: 4px; }
-    """)
+    # Apply dynamic theme stylesheet
+    app.setStyleSheet(build_stylesheet(CURRENT_THEME_COLORS))
 
     # Try to load the icon using absolute path from script directory
     icon_path = SCRIPT_DIR / 'WT_config.ico'

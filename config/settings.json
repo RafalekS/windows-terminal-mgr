@@ -1,0 +1,22 @@
+{
+  "window": {
+    "width": 1400,
+    "height": 900,
+    "min_width": 1200,
+    "min_height": 700
+  },
+  "profiles_panel": {
+    "min_width": 250,
+    "max_width": 300
+  },
+  "defaults": {
+    "font_size": 12,
+    "history_size": 9001
+  },
+  "backup": {
+    "enabled": true,
+    "max_count": 10
+  },
+  "theme": "light",
+  "wt_path_override": ""
+}
