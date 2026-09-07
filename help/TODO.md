@@ -1,43 +1,60 @@
 # TODO
 
-Open items only. Completed work is archived under `help/history/`.
+Open items only. See `help/CHANGES-2026-09-07.md` for what changed in v1.1.0 and
+its test plan. Completed history is in `help/history/`.
 
-## Pending user testing (Windows 11)
+---
 
-The modularisation + WT knowledge refresh (branch `refactor/modularize`) is
-**not verified** until tested on Windows:
+## 1. Verify v1.1.0 on Windows 11
 
-- App launches; all 6 tabs render.
-- Profiles: change **Bell Style** (now `all / audible / window / taskbar / none`
-  - `visual` removed, it was never a valid WT value) and **Close on Exit** (now
-  includes `automatic`, the current WT default); Save; reopen; confirm persisted
-  and that Windows Terminal accepts the resulting `settings.json`.
-- Actions: "Built-in Action" dropdown shows the full ~70-name action list; add an
-  action using e.g. `setColorScheme`; Save; reopen.
-- Command Builder: build + Parse round-trip.
-- Folders: drag-drop, Move Up/Down (incl. inside folders), Update Item.
-- Settings + Fragment Extensions tabs behave as before.
-- `--debug` still prints diagnostics.
+Not done until tested — checklist in `help/CHANGES-2026-09-07.md`.
+After a clean pass: bump `VERSION` in `modules/main_window.py` to `1.1.1`.
 
-After a clean test: bump `VERSION` in `modules/main_window.py` to `1.1.1`.
+## 2. Folders tab — right-hand panel is confusing
 
-## Bell style - lossy combo mapping
+**Problem:** when you select a *profile* entry in the tree, the panel shows
+Folder Name / Folder Icon / Allow Empty / Inline greyed out, and only the
+Profile dropdown + Profile Icon are usable. When you select a *folder*, it's the
+other way round. Users expect to see only the fields that apply.
 
-`bellStyle` can be a list (`["audible", "window"]` etc.). The editor collapses
-any list to the single nearest combo item (`_normalise_bell_style` in
-`profiles_tab.py`). Combos like `["window", "taskbar"]` (visual only, both ways)
-have no exact combo value. A proper fix is a multi-select control. Low priority.
+This has been a known complaint since the first fixes list. It is **not** a
+regression from v1.1.0 — it's the original design.
 
-## Profile fields not yet surfaced in the editor
+**Fix:** hide the irrelevant fields per item type instead of disabling them,
+and label the Profile dropdown clearly ("Points to profile:" for an existing
+entry). Small change in `modules/folders_tab.py::onFolderSelectionChanged`.
 
-All valid per current WT docs, none currently editable:
+## 3. Bell Style can't represent every combination
 
-- `bellSound` (file path / array)
-- `pathTranslationStyle` (`none | wsl | cygwin | msys2 | mingw`) - Preview
-- `experimental.useAtlasEngine`
-- `experimental.repositionCursorWithMouse` - needs shell integration
+Windows Terminal lets `bellStyle` be a list, e.g. `["audible", "window"]`
+(sound + flash the window, but not the taskbar). Our dropdown is a single
+choice, so on load a list is collapsed to the one closest option
+(`_normalise_bell_style` in `modules/profiles_tab.py`). Editing then Saving a
+profile that had a list value will replace it with a single value.
 
-## Notes
+**Fix:** replace the dropdown with checkboxes (Sound / Flash window / Flash
+taskbar) so any combination round-trips. Low priority unless you use list
+values.
 
-- `matplotlib` is a heavy dependency used only for `fontManager.ttflist`.
-  Consider replacing with a lighter font enumeration (e.g. `QFontDatabase`).
+## 4. Profile fields Windows Terminal supports but this app can't edit yet
+
+These are all real `settings.json` profile keys per the WT docs. The editor has
+no widget for them today — if you need one, it goes in the Profiles tab
+"Advanced" group:
+
+| Key | What it does |
+|---|---|
+| `bellSound` | Path to a `.wav` (or a list of paths, picked at random) played for the bell. |
+| `pathTranslationStyle` | When you drag a file onto the terminal, how the path is rewritten: `wsl` → `/mnt/c/…`, `cygwin` → `/cygdrive/c/…`, `msys2` → `/c/…`, `mingw` → `C:/…`, `none` = as-is. WT Preview only. |
+| `experimental.useAtlasEngine` | Opt this profile into WT's experimental text renderer. |
+| `experimental.repositionCursorWithMouse` | Click on the command line with the mouse to move the text cursor there. Needs shell integration set up. |
+
+## 5. Drop the matplotlib dependency
+
+The app imports `matplotlib` **only** to get the list of installed font names
+(`matplotlib.font_manager.fontManager.ttflist`), used to fill the Font dropdown
+in the Profiles tab. matplotlib is a large install for that one list.
+
+**Fix:** use Qt's own `QtGui.QFontDatabase().families()` instead and remove
+`matplotlib` from the dependencies. One change in `modules/app_state.py`
+(`font_list = …`), one line in `README.md` / install docs.
