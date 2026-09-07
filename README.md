@@ -32,10 +32,13 @@ A powerful PyQt6 GUI application for visually managing Windows Terminal settings
 - **Live Preview**: See changes as you edit
 
 ### Keybindings & Actions
-- **Action Editor**: Configure keyboard shortcuts for ~30+ Windows Terminal actions
+- **Action Editor**: Type-aware editor for new-tab / split-pane / send-input /
+  pane / built-in actions
 - **Multi-Key Bindings**: Support for complex key combinations
+- **Key Recorder**: Press a shortcut to capture it; warns on conflicts
 - **Quick Search**: Filter actions by name
-- **Common Actions**: Pre-populated list of all standard WT actions
+- **Built-in Actions**: Full, current Windows Terminal action list (verified
+  against the Microsoft Learn docs)
 
 ### WT Command Builder
 - **Visual Command Generator**: Build complex `wt.exe` commands without memorization
@@ -49,7 +52,7 @@ A powerful PyQt6 GUI application for visually managing Windows Terminal settings
 ### Requirements
 - Windows 10/11
 - Windows Terminal (Microsoft Store or GitHub release)
-- Python 3.10 or higher
+- Python 3.11 or higher
 - PyQt6
 - commentjson
 - matplotlib (for font enumeration)
@@ -146,29 +149,34 @@ The tree structure directly controls what you see in Windows Terminal's new tab 
 
 ```
 windows-terminal-mgr/
-├── wt_manager.pyw          # Main application
-├── WT_config.ico           # Application icon
-├── WT_config.png           # Application icon (PNG)
-├── wt3.ico                 # Fallback icon
-├── CLAUDE.md               # Developer documentation
-├── README.md               # This file
-├── .gitignore              # Git ignore rules
-└── help/                   # Documentation folder
-    ├── wt_manager_fixes_todo.md
-    ├── wt_manager_fixes_completed.md
-    ├── tests.md
-    └── folder_fixes_summary.txt
+├── wt_manager.pyw          # Entry point (run this)
+├── modules/                # Application package
+│   ├── app_state.py        # settings.json load/save, shared state
+│   ├── config.py           # app config (config/settings.json)
+│   ├── themes.py            # theme colours + stylesheet
+│   ├── constants.py        # WT action names / enum option lists
+│   ├── widgets.py          # CommandStep, DragDropTreeWidget, KeyRecorderDialog
+│   ├── main_window.py      # Ui_MainWindow (composes the tab mixins)
+│   └── *_tab.py            # one mixin per tab
+├── config/
+│   ├── settings.json       # app config
+│   └── themes/{light,dark}.json
+├── WT_config.ico / .png    # application icon (wt3.ico = fallback)
+├── CLAUDE.md / README.md
+└── help/
+    ├── TODO.md             # open items
+    ├── history/            # archived planning docs
+    └── tests.md
 ```
 
 ## Development
 
 ### Architecture
 
-Single-file PyQt6 application (~2900 lines) with four main tabs:
-- **Profiles Tab**: Profile property editor
-- **Folders Tab**: New tab menu hierarchy manager
-- **Actions Tab**: Keybinding configuration
-- **Command Builder Tab**: Visual WT command generator
+PyQt6 application split into `modules/` by functionality. `Ui_MainWindow` is
+composed from six tab **mixins** (Profiles, Folders, Actions, Command Builder,
+Settings, Fragment Extensions) sharing one runtime object. `wt_manager.pyw` is
+just the entry point.
 
 See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
 

@@ -1,3 +1,9 @@
+> **Archived.** All phases below were completed. Later work (Sept 2026):
+> the single `wt_manager.pyw` was split into the `modules/` package, dead code
+> removed, and the built-in action list + profile enums (`bellStyle`,
+> `closeOnExit`) refreshed against current Microsoft Learn docs. See
+> `help/TODO.md` for anything still open.
+
 # Windows Terminal Manager - Enhancement Plan
 
 **Branch:** `enhancements` (branched from `main` at tag `v1.0-stable`)

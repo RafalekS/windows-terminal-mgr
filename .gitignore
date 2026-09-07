@@ -35,3 +35,6 @@ backup/
 
 # User-specific settings
 settings.json.bak_*
+
+# session artifact (hook-generated)
+session_summary.md
