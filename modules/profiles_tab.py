@@ -328,6 +328,8 @@ class ProfilesMixin:
         self.addEnvVarButton.clicked.connect(self._addEnvVar)
         self.removeEnvVarButton.clicked.connect(self._removeEnvVar)
         self.envVarsTable.itemChanged.connect(self._onEnvVarChanged)
+        # Row order is meaningful for env vars - persist width/order only.
+        self._persist.bind_table(self.envVarsTable, "env_vars", sortable=False)
 
         scroll_main.addWidget(advanced_group)
         scroll_main.addStretch()

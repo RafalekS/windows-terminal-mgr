@@ -126,7 +126,7 @@ class CommandBuilderMixin:
         btn_row.addWidget(remove_btn)
         sb_layout.addLayout(btn_row)
 
-        step_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        step_splitter = self._cmd_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         self.steps_list = QtWidgets.QListWidget()
         self.steps_list.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.InternalMove)
         self.steps_list.setDefaultDropAction(QtCore.Qt.DropAction.MoveAction)
@@ -263,6 +263,7 @@ class CommandBuilderMixin:
 
         self.pane_size_label.setVisible(False)
         self.pane_size_spin.setVisible(False)
+        self._persist.bind_splitter(self._cmd_splitter, "cmd_builder")
         self.refresh_preview()
 
     # ────────────────────────────────────────────────────────────────────

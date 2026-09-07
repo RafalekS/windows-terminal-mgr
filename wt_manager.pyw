@@ -42,7 +42,14 @@ def main() -> int:
     ui.setupUi(main_window)
     main_window.show()
 
+    _orig_hide_event = main_window.hideEvent
+
+    def hide_event(event):
+        ui.flush_ui_state()
+        _orig_hide_event(event)
+
     def close_event(event):
+        ui.flush_ui_state()
         if not ui.unsaved_changes:
             event.accept()
             return
@@ -60,6 +67,7 @@ def main() -> int:
         else:
             event.ignore()
 
+    main_window.hideEvent = hide_event
     main_window.closeEvent = close_event
     return app.exec()
 

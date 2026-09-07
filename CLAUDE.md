@@ -32,6 +32,7 @@ closeEvent). All logic is in the `modules/` package:
 | `config.py` | `APP_CONFIG` from `config/settings.json`; `load_app_config()`, `save_app_config()`, `SCRIPT_DIR`. |
 | `themes.py` | `CURRENT_THEME_COLORS` from `config/themes/<name>.json`; `load_theme()`, `build_stylesheet()`. |
 | `constants.py` | `COMMON_ACTIONS` (full WT action list), `PANE/RESIZE/SWAP_DIRECTIONS`, `BUILTIN_SCHEMES`, profile enum option lists (`BELL_STYLES`, `CLOSE_ON_EXIT_MODES`, ...). Verified against MS Learn docs. |
+| `table_state.py` | `PersistentUI` - persists table/tree column widths+order+sort, splitter positions, and window geometry via `QSettings("WTManager","UIState")`. Debounced 500 ms, flushed on close/hide. `NumericItem` for numeric-sorting cells. |
 | `widgets.py` | `CommandStep`, `DragDropTreeWidget`, `KeyRecorderDialog`. |
 | `main_window.py` | `Ui_MainWindow` - subclasses the six tab mixins; owns `setupUi`, `statusLabel`, `saveButton` wiring, `setUnsavedChanges()`, `dumpOnSave()`, `VERSION`. |
 | `profiles_tab.py` | `ProfilesMixin` - profile editor, "Defaults" pseudo-profile, env vars, pixel shader, profile templates. |
@@ -86,6 +87,12 @@ widget namespace. When adding a widget, create it in the same mixin's
 - Never use bare `except:` / `except: pass`; catch specific exceptions.
 - Tables use `Interactive` resize + movable sections; never
   `setStretchLastSection`. Sorting is disabled during population.
+- Layout persistence: after a table/tree is populated (and, for a table,
+  sorting is about to be enabled), call
+  `self._persist.bind_table(widget, "<key>")` / `bind_tree` / `bind_splitter`
+  from inside that tab's `setup*Tab`. `bind_table(..., sortable=False)` for
+  grids where row order carries meaning (env vars). Window geometry is bound
+  once in `main_window.setupUi`. `flush_ui_state()` is called on close/hide.
 
 ## Adding a profile property
 

@@ -9,6 +9,7 @@ from PyQt6 import QtCore, QtWidgets
 from modules import app_state
 from modules import themes
 from modules.config import APP_CONFIG
+from modules.table_state import PersistentUI
 from modules.actions_tab import ActionsMixin
 from modules.command_builder_tab import CommandBuilderMixin
 from modules.folders_tab import FoldersMixin
@@ -28,6 +29,9 @@ class Ui_MainWindow(ProfilesMixin, FoldersMixin, ActionsMixin,
         self.ui_initialized = False
 
     def setupUi(self, MainWindow):
+        self._main_window = MainWindow
+        self._persist = PersistentUI(MainWindow)
+
         MainWindow.setObjectName("Windows Terminal Settings")
         cfg_win = APP_CONFIG.get("window", {})
         MainWindow.resize(cfg_win.get("width", 1400), cfg_win.get("height", 900))
@@ -80,7 +84,16 @@ class Ui_MainWindow(ProfilesMixin, FoldersMixin, ActionsMixin,
         bottom_layout.addWidget(self.statusLabel)
         main_layout.addLayout(bottom_layout)
 
+        # Restore window geometry last, once every child widget exists. The
+        # per-tab widgets (tables, trees, splitters) register themselves with
+        # self._persist from inside their own setup*Tab methods.
+        self._persist.bind_window(MainWindow)
+
         self.ui_initialized = True
+
+    def flush_ui_state(self):
+        """Persist all tracked layout state immediately (call on close/hide)."""
+        self._persist.flush()
 
     # ── Shared status / save ────────────────────────────────────────────
     def setUnsavedChanges(self):

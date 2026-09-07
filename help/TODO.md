@@ -49,6 +49,17 @@ no widget for them today — if you need one, it goes in the Profiles tab
 | `experimental.useAtlasEngine` | Opt this profile into WT's experimental text renderer. |
 | `experimental.repositionCursorWithMouse` | Click on the command line with the mouse to move the text cursor there. Needs shell integration set up. |
 
+## DONE (pending Windows test)
+
+- **Table / splitter / window persistence** (`modules/table_state.py`).
+  Actions table (widths + column order + sort), Env Vars table (widths + order),
+  Folders tree + Fragment tree (widths + order), Command Builder + Fragments
+  splitters, main window size/position. Verify on Windows: resize a column,
+  reorder columns, drag a splitter, resize the window -> close -> reopen ->
+  everything is where you left it.
+
+## Later
+
 ## 5. Drop the matplotlib dependency
 
 The app imports `matplotlib` **only** to get the list of installed font names

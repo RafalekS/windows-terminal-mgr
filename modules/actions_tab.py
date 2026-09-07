@@ -49,7 +49,8 @@ class ActionsMixin:
         self.actionsTable.horizontalHeader().setSectionsMovable(True)
         self.actionsTable.verticalHeader().setVisible(False)
         self.actionsTable.setAlternatingRowColors(True)
-        self._restoreActionsColumnWidths()
+        for i, w in enumerate(_ACTIONS_COL_DEFAULTS):
+            self.actionsTable.setColumnWidth(i, w)
         main_layout.addWidget(self.actionsTable, 3)
 
         # ── Editor ──
@@ -236,9 +237,10 @@ class ActionsMixin:
         main_layout.addWidget(help_label)
 
         self.loadActions()
+        # Coding-standard order: populate -> enable sorting -> restore state.
+        self._persist.bind_table(self.actionsTable, "actions")
 
         self.actionsTable.currentCellChanged.connect(self.onActionTableSelectionChanged)
-        self.actionsTable.horizontalHeader().sectionResized.connect(self._saveActionsColumnWidths)
         self.addActionButton.clicked.connect(self.addAction)
         self.updateActionButton.clicked.connect(self.updateAction)
         self.deleteActionButton.clicked.connect(self.deleteAction)
@@ -257,22 +259,6 @@ class ActionsMixin:
         layout.addRow("Direction:", combo)
         self.actionStack.addWidget(page)
         return combo
-
-    # ────────────────────────────────────────────────────────────────────
-    #  Column width persistence
-    # ────────────────────────────────────────────────────────────────────
-    def _saveActionsColumnWidths(self):
-        settings = QtCore.QSettings("WTManager", "ActionsTable")
-        header = self.actionsTable.horizontalHeader()
-        for col in range(self.actionsTable.columnCount()):
-            settings.setValue(f"col{col}", header.sectionSize(col))
-
-    def _restoreActionsColumnWidths(self):
-        settings = QtCore.QSettings("WTManager", "ActionsTable")
-        header = self.actionsTable.horizontalHeader()
-        for col in range(self.actionsTable.columnCount()):
-            default = _ACTIONS_COL_DEFAULTS[col] if col < len(_ACTIONS_COL_DEFAULTS) else 100
-            header.resizeSection(col, settings.value(f"col{col}", default, type=int))
 
     # ────────────────────────────────────────────────────────────────────
     #  Table population

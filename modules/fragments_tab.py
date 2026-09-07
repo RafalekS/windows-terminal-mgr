@@ -58,7 +58,7 @@ class FragmentsMixin:
         info_label.setWordWrap(True)
         main_layout.addWidget(info_label)
 
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        splitter = self._frag_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         main_layout.addWidget(splitter, 1)
 
         # ── Left: file tree ──
@@ -150,6 +150,8 @@ class FragmentsMixin:
         save_frag_btn.clicked.connect(self._saveFragmentFile)
 
         self._refreshFragmentTree()
+        self._persist.bind_tree(self.fragmentTree, "fragments")
+        self._persist.bind_splitter(self._frag_splitter, "fragments")
 
     # ────────────────────────────────────────────────────────────────────
     #  Tree

@@ -37,7 +37,8 @@ class FoldersMixin:
         self.foldersTreeWidget._ui = self
         self.foldersTreeWidget.setHeaderLabels(["Item", "Type"])
         self.foldersTreeWidget.setMinimumHeight(400)
-        self.restoreTreeColumnWidths()
+        self.foldersTreeWidget.setColumnWidth(0, 250)
+        self.foldersTreeWidget.setColumnWidth(1, 100)
         left_layout.addWidget(self.foldersTreeWidget)
 
         folder_buttons_layout = QtWidgets.QVBoxLayout()
@@ -153,9 +154,9 @@ class FoldersMixin:
         main_layout.addWidget(right_widget)
 
         self.loadFolders()
+        self._persist.bind_tree(self.foldersTreeWidget, "folders")
 
         self.foldersTreeWidget.currentItemChanged.connect(self.onFolderSelectionChanged)
-        self.foldersTreeWidget.header().sectionResized.connect(self.saveTreeColumnWidths)
         self.addFolderButton.clicked.connect(self.addFolder)
         self.addProfileToMenuButton.clicked.connect(self.addProfileToMenu)
         self.addSeparatorButton.clicked.connect(self.addSeparator)
@@ -163,25 +164,6 @@ class FoldersMixin:
         self.deleteFolderButton.clicked.connect(self.deleteFolderItem)
         self.moveFolderUpButton.clicked.connect(self.moveFolderItemUp)
         self.moveFolderDownButton.clicked.connect(self.moveFolderItemDown)
-
-    # ────────────────────────────────────────────────────────────────────
-    #  Column width persistence
-    # ────────────────────────────────────────────────────────────────────
-    def saveTreeColumnWidths(self):
-        settings = QtCore.QSettings("WTManager", "ColumnWidths")
-        header = self.foldersTreeWidget.header()
-        settings.setValue("column0", header.sectionSize(0))
-        settings.setValue("column1", header.sectionSize(1))
-        debug_print(f"DEBUG: Saved column widths: {header.sectionSize(0)}, {header.sectionSize(1)}")
-
-    def restoreTreeColumnWidths(self):
-        settings = QtCore.QSettings("WTManager", "ColumnWidths")
-        header = self.foldersTreeWidget.header()
-        col0 = settings.value("column0", 250, type=int)
-        col1 = settings.value("column1", 100, type=int)
-        header.resizeSection(0, col0)
-        header.resizeSection(1, col1)
-        debug_print(f"DEBUG: Restored column widths: {col0}, {col1}")
 
     # ────────────────────────────────────────────────────────────────────
     #  Tree building
