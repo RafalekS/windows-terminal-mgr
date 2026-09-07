@@ -86,16 +86,25 @@ class FoldersMixin:
         right_layout = QtWidgets.QVBoxLayout(right_widget)
 
         details_group = QtWidgets.QGroupBox("Item Details")
-        details_layout = QtWidgets.QFormLayout(details_group)
-        details_layout.setSpacing(10)
+        self._detailsForm = QtWidgets.QFormLayout(details_group)
+        self._detailsForm.setSpacing(10)
 
         self.itemTypeLabel = QtWidgets.QLabel("")
         self.itemTypeLabel.setStyleSheet("QLabel { font-weight: bold; }")
-        details_layout.addRow("Item Type:", self.itemTypeLabel)
+        self._detailsForm.addRow("Item Type:", self.itemTypeLabel)
+
+        # Location: which folder this entry sits in. Changing it + Update Item
+        # (or "Add to menu" for an auto entry) moves/creates the entry there.
+        self.locationCombo = QtWidgets.QComboBox()
+        self.locationCombo.setToolTip(
+            "The folder this item lives in. Change it and click Update Item to move it.")
+        self._locationRowLabel = QtWidgets.QLabel("Location:")
+        self._detailsForm.addRow(self._locationRowLabel, self.locationCombo)
 
         self.folderNameEdit = QtWidgets.QLineEdit()
         self.folderNameEdit.setPlaceholderText("Enter folder name")
-        details_layout.addRow("Folder Name:", self.folderNameEdit)
+        self._folderNameRowLabel = QtWidgets.QLabel("Folder Name:")
+        self._detailsForm.addRow(self._folderNameRowLabel, self.folderNameEdit)
 
         folder_icon_layout = QtWidgets.QHBoxLayout()
         self.folderIconEdit = QtWidgets.QLineEdit()
@@ -104,25 +113,46 @@ class FoldersMixin:
         self.folderIconBrowseButton.clicked.connect(self.browseFolderIcon)
         folder_icon_layout.addWidget(self.folderIconEdit)
         folder_icon_layout.addWidget(self.folderIconBrowseButton)
-        details_layout.addRow("Folder Icon:", folder_icon_layout)
+        self._folderIconRowLabel = QtWidgets.QLabel("Folder Icon:")
+        self._folderIconRowWidget = QtWidgets.QWidget()
+        self._folderIconRowWidget.setLayout(folder_icon_layout)
+        folder_icon_layout.setContentsMargins(0, 0, 0, 0)
+        self._detailsForm.addRow(self._folderIconRowLabel, self._folderIconRowWidget)
 
+        profile_pick_layout = QtWidgets.QHBoxLayout()
+        profile_pick_layout.setContentsMargins(0, 0, 0, 0)
         self.menuProfileCombo = QtWidgets.QComboBox()
         self.menuProfileCombo.addItems([""] + profiles_list)
-        details_layout.addRow("Profile:", self.menuProfileCombo)
+        self.menuProfileCombo.setToolTip(
+            "Which profile this menu entry points to. Use 'Edit in Profiles' to rename "
+            "the profile itself.")
+        self.editInProfilesButton = QtWidgets.QPushButton("Edit in Profiles ▸")
+        self.editInProfilesButton.setToolTip("Jump to this profile on the Profiles tab")
+        self.editInProfilesButton.clicked.connect(self._editSelectedProfileEntry)
+        profile_pick_layout.addWidget(self.menuProfileCombo)
+        profile_pick_layout.addWidget(self.editInProfilesButton)
+        self._profilePickRowLabel = QtWidgets.QLabel("Shows profile:")
+        self._profilePickRowWidget = QtWidgets.QWidget()
+        self._profilePickRowWidget.setLayout(profile_pick_layout)
+        self._detailsForm.addRow(self._profilePickRowLabel, self._profilePickRowWidget)
 
         profile_icon_layout = QtWidgets.QHBoxLayout()
+        profile_icon_layout.setContentsMargins(0, 0, 0, 0)
         self.profileIconEdit = QtWidgets.QLineEdit()
         self.profileIconEdit.setPlaceholderText("Path to icon (optional)")
         self.profileIconBrowseButton = QtWidgets.QPushButton("Browse...")
         self.profileIconBrowseButton.clicked.connect(self.browseProfileIcon)
         profile_icon_layout.addWidget(self.profileIconEdit)
         profile_icon_layout.addWidget(self.profileIconBrowseButton)
-        details_layout.addRow("Profile Icon:", profile_icon_layout)
+        self._profileIconRowLabel = QtWidgets.QLabel("Profile Icon:")
+        self._profileIconRowWidget = QtWidgets.QWidget()
+        self._profileIconRowWidget.setLayout(profile_icon_layout)
+        self._detailsForm.addRow(self._profileIconRowLabel, self._profileIconRowWidget)
 
         self.allowEmptyCheckBox = QtWidgets.QCheckBox("Allow Empty (show even if no entries)")
         self.inlineCheckBox = QtWidgets.QCheckBox("Inline (don't create nested menu if single entry)")
-        details_layout.addRow("", self.allowEmptyCheckBox)
-        details_layout.addRow("", self.inlineCheckBox)
+        self._detailsForm.addRow("", self.allowEmptyCheckBox)
+        self._detailsForm.addRow("", self.inlineCheckBox)
 
         update_button_layout = QtWidgets.QHBoxLayout()
         self.updateFolderButton = QtWidgets.QPushButton("Update Item")
@@ -130,23 +160,31 @@ class FoldersMixin:
         update_button_layout.addStretch()
         update_button_layout.addWidget(self.updateFolderButton)
         update_button_layout.addStretch()
-        details_layout.addRow("", update_button_layout)
+        self._updateButtonRowWidget = QtWidgets.QWidget()
+        self._updateButtonRowWidget.setLayout(update_button_layout)
+        self._detailsForm.addRow("", self._updateButtonRowWidget)
         right_layout.addWidget(details_group)
 
         help_group = QtWidgets.QGroupBox("Folder Management Help")
         help_layout = QtWidgets.QVBoxLayout(help_group)
         help_label = QtWidgets.QLabel(
             "New Tab Menu Structure:\n"
-            "\U0001F4C1 Folder: Organizes profiles in a dropdown submenu\n"
-            "\U0001F464 Profile: A specific profile entry\n"
-            "➖ Separator: Visual divider between items\n\n"
+            "\U0001F4C1 Folder: organizes profiles in a dropdown submenu\n"
+            "\U0001F464 Profile: a menu entry that points to one profile\n"
+            "➖ Separator: visual divider\n"
+            "\U0001F4CB Remaining Profiles: auto-lists every profile not placed "
+            "explicitly (stays in the menu)\n\n"
+            "Location: the folder an item lives in. Change it and click "
+            "Update Item to move the item there.\n\n"
+            "Auto-listed profiles (blue): select one, pick a Location and click "
+            "'Add to menu' to turn it into a real entry you can move and style.\n\n"
             "Folder Options:\n"
-            "• Allow Empty: Show folder even if it contains no profiles\n"
-            "• Inline: If folder has only one item, show it directly (no submenu)\n\n"
+            "• Allow Empty: show the folder even if it has no entries\n"
+            "• Inline: if the folder has one item, show it directly (no submenu)\n\n"
             "Tips:\n"
             "• Drag items to reorder them within their parent\n"
-            "• Folders can contain profiles, separators, or other folders\n"
-            "• Use separators to group related profiles visually")
+            "• 'Shows profile' re-points an entry; use 'Edit in Profiles' to "
+            "rename the profile itself")
         help_label.setWordWrap(True)
         help_label.setObjectName("help-panel")
         help_layout.addWidget(help_label)
@@ -344,6 +382,95 @@ class FoldersMixin:
         return search(app_state.data_schemes.get("newTabMenu", []))
 
     # ────────────────────────────────────────────────────────────────────
+    #  Location dropdown helpers
+    # ────────────────────────────────────────────────────────────────────
+    _ROOT_LABEL = "(top level)"
+
+    def _folderPaths(self, exclude_uid: str = None):
+        """List every folder as ``(display_path, entries_list, folder_entry)``.
+
+        A folder is skipped (with its whole subtree) when its uid == *exclude_uid*
+        so a folder can't be moved into itself or a descendant.
+        """
+        out = []
+
+        def walk(entries, prefix):
+            for e in entries:
+                if e.get("type") != "folder":
+                    continue
+                if exclude_uid and e.get(_UID_KEY) == exclude_uid:
+                    continue
+                name = e.get("name", "Unnamed")
+                path = f"{prefix} / {name}" if prefix else name
+                e.setdefault("entries", [])
+                out.append((path, e["entries"], e))
+                walk(e["entries"], path)
+
+        walk(app_state.data_schemes.get("newTabMenu", []), "")
+        return out
+
+    def _populateLocationCombo(self, current_parent_entry, exclude_uid=None):
+        """Fill locationCombo with (top level) + every folder path. userData is
+        the folder's ``_wt_uid`` ("" for the top level) - resolve it with
+        ``_listForLocationKey`` (PyQt does not preserve list identity in
+        userData)."""
+        self.locationCombo.blockSignals(True)
+        self.locationCombo.clear()
+        self.locationCombo.addItem(self._ROOT_LABEL, "")
+        for path, _entries_list, folder in self._folderPaths(exclude_uid):
+            self.locationCombo.addItem(path, folder.get(_UID_KEY))
+
+        target_uid = (current_parent_entry.get(_UID_KEY)
+                      if current_parent_entry else "")
+        idx = self.locationCombo.findData(target_uid)
+        self.locationCombo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.locationCombo.blockSignals(False)
+
+    def _listForLocationKey(self, key):
+        """Return the entries list for a locationCombo userData value."""
+        root = app_state.data_schemes.setdefault("newTabMenu", [])
+        if not key:
+            return root
+        for _path, entries_list, folder in self._folderPaths():
+            if folder.get(_UID_KEY) == key:
+                return entries_list
+        return root
+
+    def _currentParentEntry(self, entry):
+        """The folder dict that directly contains *entry*, or None for root."""
+        parent_list, _idx = self.findParentList(entry)
+        if parent_list is None:
+            return None
+        for _path, entries_list, folder in self._folderPaths():
+            if entries_list is parent_list:
+                return folder
+        return None
+
+    # ────────────────────────────────────────────────────────────────────
+    #  Row visibility
+    # ────────────────────────────────────────────────────────────────────
+    def _showDetailRows(self, *, location, folder_fields, profile_fields, update_button):
+        form = self._detailsForm
+
+        def vis(field_widget, show):
+            try:
+                form.setRowVisible(field_widget, show)
+            except (AttributeError, RuntimeError):
+                field_widget.setVisible(show)
+                lbl = form.labelForField(field_widget)
+                if lbl is not None:
+                    lbl.setVisible(show)
+
+        vis(self.locationCombo, location)
+        vis(self.folderNameEdit, folder_fields)
+        vis(self._folderIconRowWidget, folder_fields)
+        vis(self.allowEmptyCheckBox, folder_fields)
+        vis(self.inlineCheckBox, folder_fields)
+        vis(self._profilePickRowWidget, profile_fields)
+        vis(self._profileIconRowWidget, profile_fields)
+        vis(self._updateButtonRowWidget, update_button)
+
+    # ────────────────────────────────────────────────────────────────────
     #  Selection handler
     # ────────────────────────────────────────────────────────────────────
     def onFolderSelectionChanged(self):
@@ -368,14 +495,12 @@ class FoldersMixin:
         self.profileIconEdit.clear()
         self.allowEmptyCheckBox.setChecked(True)
         self.inlineCheckBox.setChecked(False)
-
-        for w in (self.folderNameEdit, self.folderIconEdit, self.folderIconBrowseButton,
-                  self.menuProfileCombo, self.profileIconEdit, self.profileIconBrowseButton,
-                  self.allowEmptyCheckBox, self.inlineCheckBox):
-            w.setEnabled(False)
+        self.updateFolderButton.setText("Update Item")
 
         if not current_item:
             self.itemTypeLabel.setText("")
+            self._showDetailRows(location=False, folder_fields=False,
+                                 profile_fields=False, update_button=False)
             return
 
         entry = current_item.data(0, QtCore.Qt.ItemDataRole.UserRole)
@@ -385,9 +510,10 @@ class FoldersMixin:
 
         if entry_type == "folder":
             self.itemTypeLabel.setText("\U0001F4C1 Folder")
-            for w in (self.folderNameEdit, self.folderIconEdit, self.folderIconBrowseButton,
-                      self.allowEmptyCheckBox, self.inlineCheckBox):
-                w.setEnabled(True)
+            self._showDetailRows(location=True, folder_fields=True,
+                                 profile_fields=False, update_button=True)
+            self._populateLocationCombo(self._currentParentEntry(entry),
+                                        exclude_uid=entry.get(_UID_KEY))
             self.folderNameEdit.setText(entry.get("name", ""))
             self.folderIconEdit.setText(entry.get("icon", "") or "")
             self.allowEmptyCheckBox.setChecked(entry.get("allowEmpty", True))
@@ -396,20 +522,48 @@ class FoldersMixin:
 
         elif entry_type == "profile":
             self.itemTypeLabel.setText("\U0001F464 Profile")
-            for w in (self.menuProfileCombo, self.profileIconEdit, self.profileIconBrowseButton):
-                w.setEnabled(True)
+            self._showDetailRows(location=True, folder_fields=False,
+                                 profile_fields=True, update_button=True)
+            self._populateLocationCombo(self._currentParentEntry(entry))
             self.menuProfileCombo.setCurrentText(self.getProfileNameByGuid(entry.get("profile", "")))
             self.profileIconEdit.setText(entry.get("icon", "") or "")
 
         elif entry_type == "separator":
             self.itemTypeLabel.setText("➖ Separator")
+            self._showDetailRows(location=True, folder_fields=False,
+                                 profile_fields=False, update_button=True)
+            self._populateLocationCombo(self._currentParentEntry(entry))
 
         elif entry_type == "remainingProfiles":
-            self.itemTypeLabel.setText("\U0001F4CB Remaining Profiles (auto-generated)")
+            self.itemTypeLabel.setText(
+                "\U0001F4CB Remaining Profiles (auto-generated - kept in the menu)")
+            self._showDetailRows(location=False, folder_fields=False,
+                                 profile_fields=False, update_button=False)
 
         elif entry_type == "_virtual_remaining":
             name = self.getProfileNameByGuid(entry.get("profile", ""))
-            self.itemTypeLabel.setText(f"\U0001F464 {name} (auto-listed, not explicitly in menu)")
+            self.itemTypeLabel.setText(
+                f"\U0001F464 {name} (auto-listed - pick a location and click "
+                f"'Add to menu' to make it a real entry)")
+            self._showDetailRows(location=True, folder_fields=False,
+                                 profile_fields=False, update_button=True)
+            self._populateLocationCombo(None)
+            self.updateFolderButton.setText("Add to menu")
+            self.deleteFolderButton.setEnabled(False)
+
+    def _editSelectedProfileEntry(self):
+        """Jump to the Profiles tab and select the profile this entry points to."""
+        current_item = self.foldersTreeWidget.currentItem()
+        if not current_item:
+            return
+        entry = current_item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+        if not entry or entry.get("type") not in ("profile", "_virtual_remaining"):
+            return
+        name = self.getProfileNameByGuid(entry.get("profile", ""))
+        self.tabWidget.setCurrentIndex(0)  # Profiles tab
+        matches = self.listWidget.findItems(name, QtCore.Qt.MatchFlag.MatchFixedString)
+        if matches:
+            self.listWidget.setCurrentItem(matches[0])
 
     # ────────────────────────────────────────────────────────────────────
     #  Icon browsers
@@ -550,6 +704,12 @@ class FoldersMixin:
         if not entry:
             return
         entry_type = entry.get("type", "unknown")
+
+        # Auto-listed profile -> promote it to a real, explicit menu entry.
+        if entry_type == "_virtual_remaining":
+            self._promoteAutoProfile(entry)
+            return
+
         old_name = entry.get("name", "") if entry_type == "folder" else ""
 
         parent_list, idx = self.findParentList(entry)
@@ -583,18 +743,59 @@ class FoldersMixin:
             else:
                 actual_entry.pop("icon", None)
 
+        # Location move (folder / profile / separator).
+        moved_to = self._applyLocationChange(actual_entry, parent_list)
+
         self.loadFolders()
         self.setUnsavedChanges()
         self.reselectItemByIdentity(actual_entry)
 
         if entry_type == "folder":
-            QtWidgets.QMessageBox.information(
-                None, "Updated",
-                f"Folder updated successfully.\nOld name: '{old_name}'\n"
-                f"New name: '{actual_entry.get('name', '')}'.")
+            msg = (f"Folder updated.\nOld name: '{old_name}'\n"
+                   f"New name: '{actual_entry.get('name', '')}'.")
         else:
-            QtWidgets.QMessageBox.information(
-                None, "Updated", f"{entry_type.capitalize()} updated successfully.")
+            msg = f"{entry_type.capitalize()} updated."
+        if moved_to:
+            msg += f"\nMoved to: {moved_to}."
+        QtWidgets.QMessageBox.information(None, "Updated", msg)
+
+    def _applyLocationChange(self, actual_entry, current_list):
+        """If the Location combo points at a different list, move *actual_entry*
+        there (appended at the end). Returns the destination label, or None."""
+        dest_list = self._listForLocationKey(self.locationCombo.currentData())
+        if dest_list is current_list:
+            return None
+        try:
+            current_list.remove(actual_entry)
+        except ValueError:
+            return None
+        dest_list.append(actual_entry)
+        return self.locationCombo.currentText()
+
+    def _promoteAutoProfile(self, virtual_entry):
+        """Turn an auto-listed ('_virtual_remaining') profile into a real
+        ``{"type":"profile", ...}`` entry in the chosen Location.
+        ``remainingProfiles`` is left untouched - that profile simply stops
+        being auto-listed because it now has an explicit entry."""
+        guid = virtual_entry.get("profile")
+        if not guid:
+            return
+        dest_list = self._listForLocationKey(self.locationCombo.currentData())
+        new_entry = {
+            "type": "profile",
+            "profile": guid,
+            "icon": None,
+            _UID_KEY: str(_uuid.uuid4()),
+        }
+        dest_list.append(new_entry)
+        self.loadFolders()
+        self.setUnsavedChanges()
+        self.reselectItemByIdentity(new_entry)
+        QtWidgets.QMessageBox.information(
+            None, "Added to menu",
+            f"'{self.getProfileNameByGuid(guid)}' is now an explicit entry in "
+            f"{self.locationCombo.currentText()}.\n"
+            "It no longer appears under Remaining Profiles.")
 
     def deleteFolderItem(self):
         current_item = self.foldersTreeWidget.currentItem()

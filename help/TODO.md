@@ -58,6 +58,20 @@ no widget for them today — if you need one, it goes in the Profiles tab
   reorder columns, drag a splitter, resize the window -> close -> reopen ->
   everything is where you left it.
 
+- **Folders tab rework.**
+  - Item Details panel now *hides* irrelevant rows instead of greying them.
+  - New **Location** dropdown: shows which folder an item sits in (path for
+    nested, "(top level)" for root). Change it + Update Item -> the item moves
+    there. Works for folders, profile entries and separators. A folder can't be
+    moved into itself/a descendant.
+  - **Auto-listed profiles** (the blue "Remaining Profiles" children): select
+    one, pick a Location, click **"Add to menu"** -> it becomes a real
+    `{"type":"profile"}` entry. `remainingProfiles` stays in the menu.
+  - "Profile" dropdown relabelled **"Shows profile"** + an **"Edit in Profiles ▸"**
+    button that jumps to that profile on the Profiles tab (rename happens there,
+    not here).
+  - "Move Profile" button kept as-is.
+
 ## Later
 
 ## 5. Drop the matplotlib dependency

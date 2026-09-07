@@ -81,7 +81,11 @@ widget namespace. When adding a widget, create it in the same mixin's
 - Use `debug_print()` (not `print()`) for diagnostics; test with `--debug`.
 - Folders tab: identity is tracked by `_wt_uid`; `findParentList(entry)` locates
   an entry's containing list + index. `reselectItemByIdentity(entry)` re-selects
-  after a `loadFolders()` reload.
+  after a `loadFolders()` reload. The Item Details panel hides rows per item type
+  (`_showDetailRows`); the **Location** combo stores each folder's `_wt_uid` as
+  userData (PyQt drops list identity in userData) - resolve via
+  `_listForLocationKey`. `_virtual_remaining` entries are display-only until
+  promoted by `_promoteAutoProfile`.
 - `dumpJson()` backs up before every save; backups pruned to
   `APP_CONFIG['backup']['max_count']`.
 - Never use bare `except:` / `except: pass`; catch specific exceptions.
