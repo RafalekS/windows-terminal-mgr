@@ -76,17 +76,8 @@ class ProfilesMixin:
         profile_mgmt_layout.addWidget(self.deleteProfileButton, 2, 0, 1, 2)
         left_layout.addLayout(profile_mgmt_layout)
 
-        save_separator = QtWidgets.QFrame()
-        save_separator.setFrameShape(QtWidgets.QFrame.Shape.HLine)
-        save_separator.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
-        left_layout.addWidget(save_separator)
-
-        self.saveButton = QtWidgets.QPushButton("Save")
-        self.saveButton.setObjectName("btn-save")
-        self.saveButton.setMinimumSize(120, 40)
-        self.saveButton.setMaximumSize(300, 40)
-        self.saveButton.clicked.connect(self.dumpOnSave)
-        left_layout.addWidget(self.saveButton)
+        # The Save button lives in the shared bottom bar (main_window.setupUi) so
+        # it is reachable from every tab.
         left_layout.addStretch()
         main_layout.addWidget(left_widget)
 

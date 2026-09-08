@@ -242,8 +242,8 @@ class SettingsMixin:
             QtWidgets.QMessageBox.information(
                 None, "Settings Saved",
                 "Application settings saved.\n\n"
-                "Click the main 'Save' button (Profiles tab) to write WT global settings "
-                "to settings.json.")
+                "Click 'Save settings.json' in the bottom bar to write the WT global "
+                "settings to settings.json.")
         else:
             QtWidgets.QMessageBox.warning(
                 None, "Save Failed",

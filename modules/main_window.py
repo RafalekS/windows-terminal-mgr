@@ -78,10 +78,22 @@ class Ui_MainWindow(ProfilesMixin, FoldersMixin, ActionsMixin,
         self.setupSettingsTab()
         self.setupFragmentsTab()
 
+        # ── Shared bottom bar: status + Save (works from every tab) ──
         bottom_layout = QtWidgets.QHBoxLayout()
         self.statusLabel = QtWidgets.QLabel("")
-        self.statusLabel.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        bottom_layout.addWidget(self.statusLabel)
+        self.statusLabel.setAlignment(QtCore.Qt.AlignmentFlag.AlignVCenter
+                                      | QtCore.Qt.AlignmentFlag.AlignLeft)
+        bottom_layout.addWidget(self.statusLabel, 1)
+
+        self.saveButton = QtWidgets.QPushButton("Save settings.json")
+        self.saveButton.setObjectName("btn-save")
+        self.saveButton.setMinimumSize(160, 40)
+        self.saveButton.setToolTip(
+            "Write all pending changes (profiles, folders, actions, ...) to "
+            "Windows Terminal's settings.json")
+        self.saveButton.clicked.connect(self.dumpOnSave)
+        bottom_layout.addWidget(self.saveButton)
+
         main_layout.addLayout(bottom_layout)
 
         # Restore window geometry last, once every child widget exists. The
