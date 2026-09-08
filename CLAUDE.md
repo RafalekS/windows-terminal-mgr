@@ -37,7 +37,7 @@ closeEvent). All logic is in the `modules/` package:
 | `main_window.py` | `Ui_MainWindow` - subclasses the six tab mixins; owns `setupUi`, `statusLabel`, `saveButton` wiring, `setUnsavedChanges()`, `dumpOnSave()`, `VERSION`. |
 | `profiles_tab.py` | `ProfilesMixin` - profile editor, "Defaults" pseudo-profile, env vars, pixel shader, profile templates. |
 | `folders_tab.py` | `FoldersMixin` - `newTabMenu` tree, add/move/delete/drag-drop, menu-location lookups. |
-| `actions_tab.py` | `ActionsMixin` - actions/keybindings table + type-aware editor + key recorder. |
+| `actions_tab.py` | `ActionsMixin` - actions/keybindings table + type-aware editor + key recorder. Editor has a mode (`_setEditorMode` "new"/"edit"); Add mints a fresh id and clears; `loadActions` dedupes `{id,keys}` keybindings. |
 | `command_builder_tab.py` | `CommandBuilderMixin` - visual `wt.exe` builder + command parser. |
 | `settings_tab.py` | `SettingsMixin` - app config + a few global WT settings. |
 | `fragments_tab.py` | `FragmentsMixin` - browse/create/edit WT JSON fragment files. |

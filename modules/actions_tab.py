@@ -1,6 +1,7 @@
 """Actions & Key Bindings tab: table of actions/keybindings with a
 type-aware editor, key recorder, and column-width persistence."""
 
+import copy
 import uuid as _uuid
 
 import commentjson
@@ -57,6 +58,10 @@ class ActionsMixin:
         editor_group = QtWidgets.QGroupBox("Edit Action")
         editor_layout = QtWidgets.QFormLayout(editor_group)
         editor_layout.setSpacing(6)
+
+        self.editorModeLabel = QtWidgets.QLabel("New action — not yet saved")
+        self.editorModeLabel.setStyleSheet("QLabel { font-weight: bold; }")
+        editor_layout.addRow("", self.editorModeLabel)
 
         self.actionNameEdit = QtWidgets.QLineEdit()
         self.actionNameEdit.setPlaceholderText("Display name for the action")
@@ -198,7 +203,10 @@ class ActionsMixin:
         adv_layout = QtWidgets.QFormLayout(adv_group)
         adv_layout.setSpacing(6)
         self.actionIdEdit = QtWidgets.QLineEdit()
-        self.actionIdEdit.setPlaceholderText("Auto-generated if left empty")
+        self.actionIdEdit.setPlaceholderText("Auto-generated for new actions")
+        self.actionIdEdit.setToolTip(
+            "Only used by 'Save Changes' - lets you rename an existing action's id. "
+            "Ignored by 'Add' (a new action always gets a fresh id).")
         adv_layout.addRow("Action ID:", self.actionIdEdit)
         self.actionArgsEdit = QtWidgets.QTextEdit()
         self.actionArgsEdit.setMaximumHeight(80)
@@ -212,28 +220,38 @@ class ActionsMixin:
         main_layout.addWidget(editor_group)
 
         btn_layout = QtWidgets.QHBoxLayout()
-        self.addActionButton = QtWidgets.QPushButton("Add New")
+        self.newActionButton = QtWidgets.QPushButton("New")
+        self.newActionButton.setToolTip("Clear the editor to start a new action")
+        self.addActionButton = QtWidgets.QPushButton("Add")
         self.addActionButton.setObjectName("btn-add")
+        self.addActionButton.setToolTip("Create this new action (gets a fresh id)")
         self.updateActionButton = QtWidgets.QPushButton("Save Changes")
         self.updateActionButton.setObjectName("btn-update")
+        self.updateActionButton.setToolTip("Write these fields back to the selected action")
+        self.duplicateActionButton = QtWidgets.QPushButton("Duplicate")
+        self.duplicateActionButton.setToolTip(
+            "Copy the selected action with a fresh id and no shortcut")
         self.deleteActionButton = QtWidgets.QPushButton("Delete")
         self.deleteActionButton.setObjectName("btn-delete")
         self.moveActionUpButton = QtWidgets.QPushButton("Move Up")
         self.moveActionDownButton = QtWidgets.QPushButton("Move Down")
-        self.clearFieldsButton = QtWidgets.QPushButton("Clear")
+        btn_layout.addWidget(self.newActionButton)
         btn_layout.addWidget(self.addActionButton)
         btn_layout.addWidget(self.updateActionButton)
+        btn_layout.addWidget(self.duplicateActionButton)
         btn_layout.addWidget(self.deleteActionButton)
         btn_layout.addStretch()
         btn_layout.addWidget(self.moveActionUpButton)
         btn_layout.addWidget(self.moveActionDownButton)
-        btn_layout.addWidget(self.clearFieldsButton)
         main_layout.addLayout(btn_layout)
 
         help_label = QtWidgets.QLabel(
-            "Modifiers: ctrl, shift, alt, win  |  Keys: enter, tab, space, esc, f1-f24, "
-            "up/down/left/right  |  Example: ctrl+shift+t")
+            "New = start a fresh action  ·  Add = create it  ·  Save Changes = update the "
+            "selected one  ·  Duplicate = copy it (fresh id, no shortcut).\n"
+            "Shortcut: comma-separate for several, e.g. ctrl+shift+t, f5.  "
+            "Modifiers: ctrl shift alt win.  Keys: enter tab space esc f1-f24 up/down/left/right.")
         help_label.setObjectName("hint-label")
+        help_label.setWordWrap(True)
         main_layout.addWidget(help_label)
 
         self.loadActions()
@@ -241,12 +259,17 @@ class ActionsMixin:
         self._persist.bind_table(self.actionsTable, "actions")
 
         self.actionsTable.currentCellChanged.connect(self.onActionTableSelectionChanged)
+        self.actionsTable.horizontalHeader().sortIndicatorChanged.connect(
+            lambda *_: self._updateMoveButtons())
+        self.newActionButton.clicked.connect(self.newAction)
         self.addActionButton.clicked.connect(self.addAction)
         self.updateActionButton.clicked.connect(self.updateAction)
+        self.duplicateActionButton.clicked.connect(self.duplicateAction)
         self.deleteActionButton.clicked.connect(self.deleteAction)
         self.moveActionUpButton.clicked.connect(self.moveActionUp)
         self.moveActionDownButton.clicked.connect(self.moveActionDown)
-        self.clearFieldsButton.clicked.connect(self.clearActionFields)
+
+        self._setEditorMode("new")
 
     def _simpleComboPage(self, items, tooltip):
         page = QtWidgets.QWidget()
@@ -261,14 +284,95 @@ class ActionsMixin:
         return combo
 
     # ────────────────────────────────────────────────────────────────────
+    #  Editor mode / helpers
+    # ────────────────────────────────────────────────────────────────────
+    def _setEditorMode(self, mode: str):
+        """mode is "new" (Add enabled, editing a fresh action) or
+        "edit" (Save Changes enabled, a table row is selected)."""
+        self._editorMode = mode
+        is_new = mode == "new"
+        self.addActionButton.setEnabled(is_new)
+        self.updateActionButton.setEnabled(not is_new)
+        self.duplicateActionButton.setEnabled(not is_new)
+        self.deleteActionButton.setEnabled(not is_new)
+        if is_new:
+            self.editorModeLabel.setText("New action — not yet saved")
+        else:
+            name = self.actionNameEdit.text().strip() or self.actionIdEdit.text().strip() or "(unnamed)"
+            self.editorModeLabel.setText(f"Editing: {name}")
+        self._updateMoveButtons()
+
+    def _sortActive(self) -> bool:
+        """True when the table is sorted by a column (so visual order != data
+        order and Move Up/Down would be wrong)."""
+        header = self.actionsTable.horizontalHeader()
+        return header.sortIndicatorSection() >= 0 and header.isSortIndicatorShown()
+
+    def _updateMoveButtons(self):
+        row_type, data_idx = self._getActionRowMeta(self.actionsTable.currentRow())
+        actions = app_state.data_schemes.get("actions", [])
+        can = (row_type == "action" and not self._sortActive())
+        self.moveActionUpButton.setEnabled(can and data_idx > 0)
+        self.moveActionDownButton.setEnabled(can and 0 <= data_idx < len(actions) - 1)
+        tip = ("Clear the column sort to reorder actions"
+               if self._sortActive() else "")
+        self.moveActionUpButton.setToolTip(tip)
+        self.moveActionDownButton.setToolTip(tip)
+
+    @staticmethod
+    def _freshActionId(name: str, existing_ids: set) -> str:
+        """Mint a unique ``User.<slug>.<hex>`` id."""
+        slug = "".join(c for c in (name or "action") if c.isalnum() or c in "._-") or "action"
+        while True:
+            candidate = f"User.{slug}.{_uuid.uuid4().hex[:6]}"
+            if candidate not in existing_ids:
+                return candidate
+
+    @staticmethod
+    def _dedupeKeybindings(keybindings: list) -> int:
+        """Remove exact-duplicate (id, keys) entries in place. Returns count removed."""
+        seen = set()
+        kept = []
+        for b in keybindings:
+            sig = (b.get("id"), b.get("keys"))
+            if sig in seen:
+                continue
+            seen.add(sig)
+            kept.append(b)
+        removed = len(keybindings) - len(kept)
+        keybindings[:] = kept
+        return removed
+
+    def _rebuildKeybindings(self, action_id: str, keys_text: str):
+        """Replace every keybinding for *action_id* with one per combo in
+        *keys_text* (comma-separated), deduped."""
+        keybindings = app_state.data_schemes.setdefault("keybindings", [])
+        keybindings[:] = [b for b in keybindings if b.get("id") != action_id]
+        seen = set()
+        for combo in (k.strip() for k in keys_text.split(",") if k.strip()):
+            if combo not in seen:
+                seen.add(combo)
+                keybindings.append({"id": action_id, "keys": combo})
+
+    def _existingActionIds(self, exclude_idx: int = -1) -> set:
+        return {a.get("id") for i, a in enumerate(app_state.data_schemes.get("actions", []))
+                if isinstance(a, dict) and i != exclude_idx and a.get("id")}
+
+    # ────────────────────────────────────────────────────────────────────
     #  Table population
     # ────────────────────────────────────────────────────────────────────
     def loadActions(self):
         data_schemes = app_state.data_schemes
+        keybindings = data_schemes.setdefault("keybindings", [])
+        removed = self._dedupeKeybindings(keybindings)
+        if removed:
+            app_state.debug_print(f"DEBUG loadActions: removed {removed} duplicate keybinding(s)")
+            if getattr(self, "ui_initialized", False):
+                self.setUnsavedChanges()
+
         self.actionsTable.setSortingEnabled(False)
         self.actionsTable.setRowCount(0)
         actions = data_schemes.get("actions", [])
-        keybindings = data_schemes.get("keybindings", [])
 
         id_to_keys = {}
         for binding in keybindings:
@@ -357,9 +461,11 @@ class ActionsMixin:
                 self.actionNameEdit.setText("DISABLED/UNBOUND")
                 self.actionTypeCombo.setCurrentIndex(3)
                 self.commandActionCombo.setCurrentText("null")
+            self._setEditorMode("edit")
             return
 
         if row_type != "action":
+            self._setEditorMode("new")
             return
 
         actions = data_schemes.get("actions", [])
@@ -432,6 +538,7 @@ class ActionsMixin:
                 self.commandActionCombo.setCurrentText(str(command))
 
         self.iconPathEdit.setText(action.get("icon", ""))
+        self._setEditorMode("edit")
 
     @staticmethod
     def _selectComboText(combo, text):
@@ -453,11 +560,73 @@ class ActionsMixin:
     # ────────────────────────────────────────────────────────────────────
     #  CRUD
     # ────────────────────────────────────────────────────────────────────
+    def newAction(self):
+        """Clear the editor and switch to 'new action' mode (nothing created yet)."""
+        self.actionsTable.blockSignals(True)
+        self.actionsTable.clearSelection()
+        self.actionsTable.setCurrentCell(-1, -1)
+        self.actionsTable.blockSignals(False)
+        self.clearActionFields()
+        self._setEditorMode("new")
+        self.actionNameEdit.setFocus()
+
+    def addAction(self):
+        """Create exactly one new action from the editor, with a fresh id, then
+        reset the editor to 'new' mode (option (b) - Add never clones)."""
+        data_schemes = app_state.data_schemes
+        actions = data_schemes.setdefault("actions", [])
+        data_schemes.setdefault("keybindings", [])
+
+        action_name = self.actionNameEdit.text().strip()
+        keys_text = self.keysEdit.text().strip()
+        icon_text = self.iconPathEdit.text().strip()
+        command = self._buildCommandFromFields()
+
+        if not action_name and not self._commandIsMeaningful(command):
+            QtWidgets.QMessageBox.warning(
+                None, "Nothing to add",
+                "Give the action a Name, or choose a command, before clicking Add.")
+            return
+
+        action_id = self._freshActionId(action_name, self._existingActionIds())
+        new_action = {"id": action_id}
+        if action_name:
+            new_action["name"] = action_name
+        if command is not None:
+            new_action["command"] = command
+        if icon_text:
+            new_action["icon"] = icon_text
+        actions.append(new_action)
+
+        if keys_text:
+            self._rebuildKeybindings(action_id, keys_text)
+
+        self.loadActions()
+        self.setUnsavedChanges()
+        self.newAction()  # option (b): editor is cleared, ready for the next one
+
+    def duplicateAction(self):
+        """Copy the selected action with a fresh id and no keybindings."""
+        data_schemes = app_state.data_schemes
+        row_type, data_idx = self._getActionRowMeta(self.actionsTable.currentRow())
+        actions = data_schemes.get("actions", [])
+        if row_type != "action" or not 0 <= data_idx < len(actions):
+            return
+        src = actions[data_idx]
+        clone = copy.deepcopy(src)
+        clone["id"] = self._freshActionId(src.get("name", ""), self._existingActionIds())
+        clone["name"] = (src.get("name") or src.get("id", "Action")) + " (copy)"
+        actions.insert(data_idx + 1, clone)
+
+        self.loadActions()
+        self.setUnsavedChanges()
+        self._selectActionById(clone["id"])
+
     def updateAction(self):
         data_schemes = app_state.data_schemes
         current_row = self.actionsTable.currentRow()
         row_type, data_idx = self._getActionRowMeta(current_row)
-        keybindings = data_schemes.get("keybindings", [])
+        keybindings = data_schemes.setdefault("keybindings", [])
 
         if row_type == "unbound":
             unbound = [b for b in keybindings if b.get("id") is None]
@@ -481,74 +650,47 @@ class ActionsMixin:
         action = actions[data_idx]
         old_action_id = action.get("id", "")
 
-        action["name"] = self.actionNameEdit.text().strip()
-        new_action_id = self.actionIdEdit.text().strip()
-        if new_action_id:
-            action["id"] = new_action_id
+        new_action_id = self.actionIdEdit.text().strip() or old_action_id
+        if new_action_id != old_action_id and new_action_id in self._existingActionIds(exclude_idx=data_idx):
+            QtWidgets.QMessageBox.warning(
+                None, "ID in use",
+                f"Another action already uses the id '{new_action_id}'. Choose a different id.")
+            return
+
+        name = self.actionNameEdit.text().strip()
+        if name:
+            action["name"] = name
+        else:
+            action.pop("name", None)
+        action["id"] = new_action_id
 
         command = self._buildCommandFromFields()
         if command is not None:
             action["command"] = command
-        elif "command" in action:
-            del action["command"]
+        else:
+            action.pop("command", None)
 
         icon_text = self.iconPathEdit.text().strip()
         if icon_text:
             action["icon"] = icon_text
-        elif "icon" in action:
-            del action["icon"]
+        else:
+            action.pop("icon", None)
 
-        if old_action_id:
+        # Re-point / rebuild this action's keybindings.
+        if old_action_id and old_action_id != new_action_id:
             keybindings[:] = [b for b in keybindings if b.get("id") != old_action_id]
-
-        keys_text = self.keysEdit.text().strip()
-        if keys_text and new_action_id:
-            for key in (k.strip() for k in keys_text.split(",") if k.strip()):
-                keybindings.append({"id": new_action_id, "keys": key})
+        self._rebuildKeybindings(new_action_id, self.keysEdit.text().strip())
 
         self.loadActions()
-        self.actionsTable.selectRow(current_row)
         self.setUnsavedChanges()
+        self._selectActionById(new_action_id)
 
-    def addAction(self):
-        data_schemes = app_state.data_schemes
-        data_schemes.setdefault("actions", [])
-        data_schemes.setdefault("keybindings", [])
-
-        action_name = self.actionNameEdit.text().strip()
-        action_id = self.actionIdEdit.text().strip()
-        keys_text = self.keysEdit.text().strip()
-        icon_text = self.iconPathEdit.text().strip()
-        command = self._buildCommandFromFields()
-
-        if not action_id and (action_name or command):
-            base_name = action_name or (command if isinstance(command, str) else "action")
-            safe_name = "".join(c for c in str(base_name) if c.isalnum() or c in "._-")
-            action_id = f"User.{safe_name}.{str(_uuid.uuid4())[:8]}"
-
-        if not action_id:
-            QtWidgets.QMessageBox.warning(
-                None, "Invalid Action", "Please provide a Name or fill in some fields.")
-            return
-
-        new_action = {"id": action_id}
-        if action_name:
-            new_action["name"] = action_name
-        if command is not None:
-            new_action["command"] = command
-        if icon_text:
-            new_action["icon"] = icon_text
-        data_schemes["actions"].append(new_action)
-
-        if keys_text:
-            for key in (k.strip() for k in keys_text.split(",") if k.strip()):
-                data_schemes["keybindings"].append({"id": action_id, "keys": key})
-
-        self.loadActions()
-        count = len(data_schemes.get("actions", []))
-        if count > 0:
-            self.actionsTable.selectRow(count - 1)
-        self.setUnsavedChanges()
+    def _selectActionById(self, action_id: str):
+        for row in range(self.actionsTable.rowCount()):
+            it = self.actionsTable.item(row, 3)
+            if it is not None and it.text() == action_id:
+                self.actionsTable.selectRow(row)
+                return
 
     def deleteAction(self):
         data_schemes = app_state.data_schemes
@@ -591,13 +733,11 @@ class ActionsMixin:
 
         self.loadActions()
         self.setUnsavedChanges()
-        self.clearActionFields()
-        if current_row < self.actionsTable.rowCount():
-            self.actionsTable.selectRow(current_row)
-        elif self.actionsTable.rowCount() > 0:
-            self.actionsTable.selectRow(self.actionsTable.rowCount() - 1)
+        self.newAction()
 
     def _moveAction(self, delta: int):
+        if self._sortActive():
+            return
         current_row = self.actionsTable.currentRow()
         row_type, data_idx = self._getActionRowMeta(current_row)
         if row_type != "action":
@@ -642,6 +782,22 @@ class ActionsMixin:
         path = QtWidgets.QFileDialog.getExistingDirectory(None, "Select Working Directory")
         if path:
             self.actDirEdit.setText(path)
+
+    @staticmethod
+    def _commandIsMeaningful(command) -> bool:
+        """True if *command* carries user intent (not just a bare default like
+        an empty newTab/splitPane the Clear state produces)."""
+        if command is None:
+            return False
+        if isinstance(command, str):
+            return bool(command.strip())
+        if isinstance(command, dict):
+            action = command.get("action")
+            if action in ("newTab", "splitPane"):
+                # meaningful only if the user set at least one option
+                return any(k not in ("action", "split") for k in command)
+            return bool(action or command)
+        return bool(command)
 
     def _buildCommandFromFields(self):
         """Build the command dict/string for an action from the editor fields."""

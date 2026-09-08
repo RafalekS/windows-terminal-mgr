@@ -72,6 +72,23 @@ no widget for them today — if you need one, it goes in the Profiles tab
     not here).
   - "Move Profile" button kept as-is.
 
+- **Actions tab "Add New" fixed.**
+  - Buttons: New · Add · Save Changes · Duplicate · Delete · Move Up/Down.
+  - Editor has an explicit mode ("New action - not yet saved" vs "Editing: X").
+    Add is only enabled in new mode; Save Changes / Duplicate / Delete only when
+    a row is selected.
+  - **Add** always mints a fresh `User.<slug>.<hex>` id (Action ID field is
+    ignored on Add - it's edit-only) and then clears the editor. No more
+    accidental clones.
+  - **Duplicate** copies the selected action with a fresh id, "(copy)" name and
+    no keybinding.
+  - Shortcut field is comma-separated; keybindings are rebuilt + deduped on
+    every Add/Save.
+  - `loadActions()` removes exact-duplicate `{id,keys}` keybindings on open, so
+    an already-messed settings.json self-heals on the next save.
+  - Move Up/Down are disabled while a column sort is active (visual order would
+    not match `actions[]` order).
+
 ## Later
 
 ## 5. Drop the matplotlib dependency
