@@ -17,7 +17,7 @@ from modules.fragments_tab import FragmentsMixin
 from modules.profiles_tab import ProfilesMixin
 from modules.settings_tab import SettingsMixin
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 
 
 class Ui_MainWindow(ProfilesMixin, FoldersMixin, ActionsMixin,
